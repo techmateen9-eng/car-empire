@@ -881,32 +881,80 @@ function sb(path, opts){
     return r.text().then(function(t){ return t ? JSON.parse(t) : null; });
   });
 }
+/* The live cars table has no seller-name/email/phone or photo columns of its
+   own: photos live in the car_images table, and the seller's name, email and
+   phone ride at the end of the description in a [Seller: …] tag that
+   normalizeCar reads back out. Every write MUST use the table's real column
+   names (brand, model, mileage, …) — one unknown column makes Supabase
+   reject the whole insert, which is exactly why seller ads used to vanish
+   instead of reaching the owner's approval queue. */
+function sellerTag(c){
+  return "\n[Seller: " + (c.seller || "Seller") + " | " + (c.sellerEmail || "") + " | " + (c.phone || "") + "]";
+}
+function saveCarToDB(c){
+  return sb("cars", {method:"POST", headers:{"Prefer":"return=representation"}, body:{
+    title: carTitle(c) + (c.year ? " " + c.year : ""),
+    brand:c.brand, model:c.model, year:c.year || null, price:c.price,
+    country:c.country, city:c.city,
+    mileage:(c.km === "" || c.km == null || isNaN(c.km)) ? null : c.km,
+    fuel:c.fuel || null, transmission:c.trans || null,
+    status:c.status || "Pending",
+    description:(c.desc || "") + sellerTag(c)
+  }}).then(function(rows){
+    var row = rows && rows[0];
+    if(!row || !row.id) throw new Error("Supabase did not return the new ad.");
+    c.id = String(row.id);
+    var media = (c.media && c.media.length) ? c.media : (c.img ? [c.img] : []);
+    var chain = Promise.resolve();
+    media.forEach(function(url, i){
+      chain = chain.then(function(){
+        return sb("car_images", {method:"POST", headers:{"Prefer":"return=minimal"}, body:{car_id:row.id, image_url:url, sort_order:i}}).catch(function(){});
+      });
+    });
+    return chain.then(function(){ return c; });
+  });
+}
 function normalizeCar(r){
+  var media = [];
+  if(r.car_images && r.car_images.length){
+    media = r.car_images.slice().sort(function(a,b){ return (a.sort_order || 0) - (b.sort_order || 0); }).map(function(im){ return im.image_url; }).filter(Boolean);
+  }
+  if(!media.length && (r.image_url || r.img)) media = [r.image_url || r.img];
+  var desc = r.description || r.desc || "";
+  var seller = r.seller_name || r.seller || "", sellerEmail = r.seller_email || "", phone = r.phone || r.seller_phone || "";
+  var m = desc.match(/\n?\[Seller: ([^\]]*)\]\s*$/);
+  if(m){
+    var parts = m[1].split("|").map(function(s){ return s.trim(); });
+    if(!seller && parts[0]) seller = parts[0];
+    if(!sellerEmail && parts[1]) sellerEmail = parts[1];
+    if(!phone && parts[2]) phone = parts[2];
+    desc = desc.slice(0, m.index).replace(/\s+$/, "");
+  }
   return {
     id: String(r.id),
     brand: r.brand || r.make || "Car",
-    model: r.model || r.title || "",
-    year: r.year || "", price: r.price || 0,
+    model: r.model || "",
+    year: r.year || "", price: Number(r.price || 0),
     country: r.country || "", city: r.city || "",
-    km: r.mileage_km != null ? r.mileage_km : (r.mileage || r.km || 0),
+    km: r.mileage != null ? r.mileage : (r.mileage_km != null ? r.mileage_km : (r.km || 0)),
     fuel: r.fuel || "", trans: r.transmission || r.trans || "",
-    img: r.image_url || r.img || "",
+    img: media[0] || "",
     status: r.status || "Pending",
-    seller: r.seller_name || r.seller || "Seller",
-    sellerEmail: r.seller_email || "",
-    phone: r.phone || r.seller_phone || "",
+    seller: seller || "Seller",
+    sellerEmail: sellerEmail,
+    phone: phone,
     srcUrl: r.source_url || r.srcUrl || "",
-    desc: r.description || r.desc || "",
+    desc: desc,
     views: r.views || 0, clicks: r.clicks || 0,
-    media: r.image_url ? [r.image_url] : [], video: "",
+    media: media, video: "",
     created: (r.created_at || r.created || "").toString().slice(0,10)
   };
 }
 function loadFromSupabase(){
-  return sb("cars?select=*&order=created_at.desc&limit=200").then(function(rows){
-    if(rows && rows.length){
-      var pk = rows.map(normalizeCar).filter(function(c){ return CITIES.indexOf(c.country) !== -1; });
-      if(pk.length){ state.cars = pk; state.dbLive = true; }
+  return sb("cars?select=*,car_images(image_url,sort_order)&order=created_at.desc&limit=200").then(function(rows){
+    if(rows){
+      state.cars = rows.map(normalizeCar).filter(function(c){ return CITIES.indexOf(c.country) !== -1; });
+      state.dbLive = true;
     }
   }).catch(function(){ state.dbLive = false; });
 }
@@ -954,6 +1002,9 @@ function enterAdminMode(){
   renderAdminPage();
   window.scrollTo({top:0});
   fetchOwnerFromDB().then(function(){ if(state.adminMode) renderAdminPage(); }, function(){ state.ownerDbState = "error"; if(state.adminMode) renderAdminPage(); });
+  /* Always pull the freshest ads when the panel opens, so a seller's new
+     submission is sitting in Approvals even if this tab was opened earlier. */
+  loadFromSupabase().then(function(){ if(state.adminMode) renderAdminPage(); });
 }
 /* ---------- the ONE owner: lives only in Supabase (users table, role = 'owner') ----------
    The website NEVER creates or deletes the owner account — that happens only in
@@ -1650,17 +1701,19 @@ $("sellForm").addEventListener("submit", function(e){
   c.phone = digits.replace(/^92/, "0");
   if(!c.img){ toast("Add at least one photo of your car — ads without a photo are not shown on Car Empire."); return; }
   state.cars.unshift(c);
-  sb("cars", {method:"POST", headers:{"Prefer":"return=minimal"}, body:{
-    brand:c.brand, model:c.model, year:c.year, price:c.price, country:c.country, city:c.city,
-    mileage_km:c.km, fuel:c.fuel, transmission:c.trans, image_url:c.img || null,
-    status:"Pending", seller_name:c.seller, seller_email:c.sellerEmail, description:c.desc
-  }}).catch(function(){});
   e.target.reset();
   state.pendingMedia = {images:[], items:[], video:"", videoName:"", videoMeta:""};
   if(window.__renderSellUploads) window.__renderSellUploads();
   renderGrid();
-  toast("Your car was submitted. It stays Pending until the owner approves it.");
   showView("dashboard");
+  /* The ad only reaches the owner's Approvals queue once it is actually
+     saved in Supabase — say so honestly if that save fails. */
+  saveCarToDB(c).then(function(){
+    renderGrid(); renderDashboard();
+    toast("Your car was submitted. It stays Pending until the owner approves it.");
+  }).catch(function(){
+    toast("Your ad could not be sent to the owner for approval — right now it is only saved on this screen. Check your connection, then delete it here and post it again.");
+  });
 });
 
 /* ---------- media upload with compression ---------- */
@@ -1883,7 +1936,7 @@ function renderDashboard(){
         c.price = nv; c.city = $("efCity").value.trim() || c.city; c.desc = $("efDesc").value.trim();
         var wasApproved = c.status === "Approved";
         if(wasApproved) c.status = "Pending";
-        sb("cars?id=eq." + encodeURIComponent(c.id), {method:"PATCH", headers:{"Prefer":"return=minimal"}, body:{price:c.price, city:c.city, description:c.desc, status:c.status}}).catch(function(){});
+        sb("cars?id=eq." + encodeURIComponent(c.id), {method:"PATCH", headers:{"Prefer":"return=minimal"}, body:{price:c.price, city:c.city, description:(c.desc || "") + sellerTag(c), status:c.status}}).catch(function(){});
         state.editingId = null;
         renderGrid(); renderDashboard();
         toast(wasApproved ? "Saved — the ad is back to Pending for owner re-approval." : "Listing updated.");
@@ -2135,7 +2188,13 @@ function renderOwner(){
   }).join("") + '</div><div class="panel" id="ownerPanel"></div>';
   box.innerHTML = html;
   document.querySelectorAll("[data-otab]").forEach(function(b){
-    b.addEventListener("click", function(){ state.ownerTab = b.getAttribute("data-otab"); renderOwner(); });
+    b.addEventListener("click", function(){
+      state.ownerTab = b.getAttribute("data-otab");
+      renderOwner();
+      /* Refresh from Supabase on every tab switch, so newly submitted ads
+         appear in Approvals without the owner reloading the page. */
+      loadFromSupabase().then(function(){ renderOwner(); });
+    });
   });
   var p = $("ownerPanel");
   function carRow(c, withActions){
@@ -2339,14 +2398,14 @@ function renderOwner(){
       if(nc.img) nc.media = [nc.img];
       if(!nc.model || !nc.year || !nc.price){ toast("Fill in model, year and price."); return; }
       state.cars.unshift(nc);
-      sb("cars", {method:"POST", headers:{"Prefer":"return=minimal"}, body:{
-        brand:nc.brand, model:nc.model, year:nc.year, price:nc.price, country:nc.country, city:nc.city,
-        mileage_km:nc.km, fuel:nc.fuel, transmission:nc.trans, image_url:nc.img || null,
-        status:nc.status, seller_name:nc.seller, seller_email:nc.sellerEmail, phone:nc.phone, description:nc.desc
-      }}).catch(function(){});
       state.adminAdding = false;
       renderGrid(); renderOwner();
-      toast("Ad added with status: " + nc.status + ".");
+      saveCarToDB(nc).then(function(){
+        renderGrid(); renderOwner();
+        toast("Ad added with status: " + nc.status + ".");
+      }).catch(function(){
+        toast("The ad is on this screen only — saving to Supabase failed, so it would disappear on reload. Check the connection and add it again.");
+      });
     });
   }
   var aef = $("admEditForm");
@@ -2360,7 +2419,7 @@ function renderOwner(){
       c.price = nv; c.city = $("aeCity").value.trim();
       c.phone = $("aePhone").value.trim(); c.desc = $("aeDesc").value.trim();
       c.status = $("aeStatus").value;
-      sb("cars?id=eq." + encodeURIComponent(c.id), {method:"PATCH", headers:{"Prefer":"return=minimal"}, body:{price:c.price, city:c.city, phone:c.phone, description:c.desc, status:c.status}}).catch(function(){});
+      sb("cars?id=eq." + encodeURIComponent(c.id), {method:"PATCH", headers:{"Prefer":"return=minimal"}, body:{price:c.price, city:c.city, description:(c.desc || "") + sellerTag(c), status:c.status}}).catch(function(){});
       state.adminEditingId = null;
       renderGrid(); renderOwner();
       toast("Ad updated — status: " + c.status + ".");
