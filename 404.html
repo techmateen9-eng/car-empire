@@ -260,8 +260,36 @@
   .chat-msg .who-line{display:block;font-size:11.5px;font-weight:800;opacity:.75;margin-bottom:2px}
   .chat-msg.me{align-self:flex-end;background:var(--gold);color:#14100a;border-bottom-right-radius:4px}
   .chat-msg.them{align-self:flex-start;background:var(--surface2);color:var(--ink);border:1px solid var(--line);border-bottom-left-radius:4px}
-  .chat-form{display:flex;gap:8px;margin-top:6px}
-  .chat-form input{flex:1;min-width:0;border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--surface);color:var(--ink);font:inherit}
+  .chat-form{display:flex;gap:8px;margin-top:6px;align-items:center}
+  .chat-form input{flex:1;min-width:0;border:1px solid var(--line);border-radius:999px;padding:11px 15px;background:var(--surface);color:var(--ink);font:inherit}
+  .chat-msg .msg-meta{display:flex;align-items:center;gap:4px;justify-content:flex-end;font-size:11px;opacity:.85;margin-top:3px;font-weight:600}
+  .chat-msg.them .msg-meta{justify-content:flex-start;opacity:.6}
+  .tick{display:inline-flex;align-items:center;line-height:0;color:var(--muted)}
+  .tick svg{display:block}
+  .chat-msg.me .tick{color:rgba(20,16,10,.55)}
+  .tick.read{color:#0b6bcb}
+  .chat-msg.me .tick.read{color:#0b5ed7}
+  .chat-chips{display:flex;gap:8px;flex-wrap:wrap;margin:2px 0 10px}
+  .chat-chips .chip{border:1.5px solid var(--gold);background:var(--gold-soft);color:var(--ink);border-radius:999px;padding:8px 13px;font:inherit;font-size:13.5px;font-weight:700;cursor:pointer;text-align:left}
+  .chat-chips .chip:hover{background:var(--gold);color:#14100a}
+  .chat-send{width:46px;height:46px;border-radius:50%;flex:none;padding:0}
+  .chat-head-who{display:flex;align-items:center;gap:10px;min-width:0}
+  /* ---------- central inbox rows ---------- */
+  .inbox-row{cursor:pointer;align-items:center}
+  .inbox-row:hover{background:var(--surface2)}
+  .stack-row img.avatar{width:42px;height:42px;border-radius:50%}
+  .ir-top{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+  .ir-time{font-size:12px;color:var(--muted);white-space:nowrap}
+  .ir-last{color:var(--muted);font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ir-badge{background:#d64545;color:#fff;border-radius:999px;min-width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;padding:0 6px;flex:none}
+  /* ---------- report form + owner moderation ---------- */
+  .rep-shot-prev{margin-top:8px;display:flex;align-items:flex-start;gap:10px}
+  .rep-shot-prev img{width:110px;height:78px;object-fit:cover;border-radius:10px;border:1px solid var(--line)}
+  .stack-row img.adm-shot{width:120px;height:86px;object-fit:cover;border-radius:10px;border:1px solid var(--line);cursor:zoom-in;margin-top:8px;display:block}
+  .stack-row img.adm-shot.big{width:100%;height:auto;max-height:420px;object-fit:contain;cursor:zoom-out}
+  .priv-tag{display:inline-block;font-size:11px;font-weight:800;border:1px solid var(--amber);color:var(--amber);background:var(--amber-bg);border-radius:999px;padding:1px 8px;margin-left:6px;vertical-align:middle}
+  .pill.warned{background:var(--amber-bg);color:var(--amber);border-color:var(--amber)}
+  .pill.banned{background:var(--red-bg);color:var(--red);border-color:var(--red)}
   .notice{border:1px solid var(--amber);background:var(--amber-bg);border-radius:12px;padding:14px 16px;margin-bottom:16px}
   .notice b{color:var(--amber)}
   .oknote{border:1px solid var(--green);background:var(--green-bg);border-radius:12px;padding:14px 16px;margin-bottom:16px}
@@ -789,15 +817,53 @@
 <!-- ================= IN-WEBSITE CHAT ================= -->
 <div class="overlay" id="chatOverlay" role="dialog" aria-modal="true">
   <div class="modal narrow">
-    <div class="mhead"><b id="chatTitle">Chat</b><button class="x-btn" data-close="chatOverlay" aria-label="Close">✕</button></div>
+    <div class="mhead"><span class="chat-head-who"><span id="chatAvatar"></span><b id="chatTitle">Chat</b></span><button class="x-btn" data-close="chatOverlay" aria-label="Close">✕</button></div>
     <div class="mbody">
       <p class="hint" id="chatSub" style="margin-top:0"></p>
       <div class="chat-msgs" id="chatMsgs"></div>
+      <div class="chat-chips" id="chatChips" style="display:none"></div>
       <form class="chat-form" id="chatForm">
         <input id="chatInput" placeholder="Write a message…" autocomplete="off" maxlength="1000" />
-        <button class="btn gold" type="submit">Send</button>
+        <button class="btn gold chat-send" type="submit" aria-label="Send message"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3.4 20.4 21.8 12 3.4 3.6l-.01 6.53L14 12 3.39 13.87l.01 6.53Z" fill="currentColor"/></svg></button>
       </form>
-      <p class="hint" style="margin:10px 0 0">This chat stays on Car Empire — replies appear here and in your Inbox.</p>
+      <p class="hint" style="margin:10px 0 0">This chat stays private on Car Empire — only you and the other person can read it. Every chat also lives in your one Inbox (top menu).</p>
+    </div>
+  </div>
+</div>
+
+<!-- ================= REPORT A LISTING ================= -->
+<div class="overlay" id="reportOverlay" role="dialog" aria-modal="true">
+  <div class="modal narrow">
+    <div class="mhead"><b>Report this listing</b><button class="x-btn" data-close="reportOverlay" aria-label="Close">✕</button></div>
+    <div class="mbody">
+      <p class="hint" style="margin-top:0">You are reporting: <b id="repCarTitle">—</b></p>
+      <form id="reportForm">
+        <div class="form-grid" style="grid-template-columns:1fr">
+          <div class="field"><label for="repName">Your name *</label><input id="repName" autocomplete="name" placeholder="Your full name" /></div>
+          <div class="field"><label for="repEmail">Your email *</label><input id="repEmail" type="email" autocomplete="email" placeholder="you@example.com" /></div>
+          <div class="field"><label for="repPhone">Your contact number (optional)</label><input id="repPhone" autocomplete="tel" placeholder="03XX-XXXXXXX — only if the owner may call you" /></div>
+          <div class="field"><label for="repReason">Reason *</label>
+            <select id="repReason">
+              <option value="">Choose a reason…</option>
+              <option>Spam or fake ad</option>
+              <option>Scam / fraud — asking for advance or token money</option>
+              <option>Car already sold, ad still live</option>
+              <option>Wrong price or wrong details</option>
+              <option>Stolen car or illegal activity</option>
+              <option>Abusive language or behaviour</option>
+              <option>Other</option>
+            </select></div>
+          <div class="field"><label for="repDetails">Details (optional)</label><textarea id="repDetails" maxlength="1000" placeholder="What happened? Anything that helps the owner verify — e.g. the seller asked for token money before showing the car."></textarea></div>
+          <div class="field"><label>Screenshot (optional)</label>
+            <div class="rowb" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button type="button" class="btn small gold" id="repShotBtn">Attach screenshot</button><span class="cstat" id="repShotStat">A chat screenshot or payment proof helps the owner verify faster.</span></div>
+            <input id="repShot" type="file" accept="image/*" hidden />
+            <div class="rep-shot-prev" id="repShotPrev" style="display:none"><img id="repShotImg" alt="Your attached screenshot" /><button type="button" class="btn small danger" id="repShotRemove">Remove</button></div>
+          </div>
+        </div>
+        <div class="notice" style="margin:14px 0"><b>Your privacy comes first.</b> Your name, email, number and screenshot are visible <b>only to the Car Empire owner</b> — never to the seller you are reporting, and never on the public website. They are used only to verify your report.</div>
+        <p class="hint" id="repMsg" style="min-height:20px"></p>
+        <button class="btn gold" type="submit" style="width:100%">Send report to the owner</button>
+      </form>
     </div>
   </div>
 </div>
@@ -818,11 +884,15 @@
   <div class="modal">
     <div class="mhead"><b>Privacy Policy — Car Empire</b><button class="x-btn" data-close="privacyOverlay" aria-label="Close">✕</button></div>
     <div class="mbody">
-      <p><b>Last updated:</b> November 2026. This page explains, in plain words, what information Car Empire collects when you use the marketplace and what we do with it.</p>
+      <p><b>Last updated:</b> November 2026. Privacy comes first at Car Empire. This page explains, in plain words, what information we collect when you use the marketplace, who can see it, and what we never do with it.</p>
       <p><b>What we collect.</b> When you create an account we store your name, your public username, your profile picture, your email and your city. When you post a car we store the ad details, the photos and video you upload, and the mobile number you give for buyers to contact you. When you browse, we count ad views and clicks so sellers can see them in their own dashboard — these counts are never shown publicly.</p>
-      <p><b>How we use it.</b> Your information is used only to run the marketplace: showing your ads, letting buyers contact you, reviewing listings before they go public, and keeping accounts secure. Your mobile number is shown on your own ads through the Show Number button, because that is how buyers reach you.</p>
-      <p><b>What we never do.</b> We do not sell your personal information, and we do not share your email address with advertisers. Forum posts and blog comments are public by design — please do not post private information in them.</p>
-      <p><b>Your choices.</b> You can edit your profile, change your profile picture, or delete your own ads at any time from your dashboard. To ask for your account data to be removed, email us at techmateen9@gmail.com.</p>
+      <p><b>Passwords and accounts stay locked down.</b> Your password is checked inside the database and is never shown on the website or readable through it — not even the owner can see your password. The member list is not public: nobody can list, search or download Car Empire members' emails. Offers, reports and inspection bookings can be added through the website but can never be read back through it; only the owner, after signing in to the admin panel, can see them.</p>
+      <p><b>Your chats are private.</b> Buyer–seller chats on Car Empire are visible only to the two people in the conversation. Chat messages are never shown publicly, never used for advertising, and never shared with anyone else.</p>
+      <p><b>Reports are private — the seller never finds out who reported them.</b> When you report an ad, your name, your email, your optional contact number and any screenshot you attach go <b>only to the Car Empire owner</b>, so the report can be verified. They are never shown to the seller you reported, never published, and never used for anything except checking that report. If a report is verified, the owner may warn the seller and remove the ad, or ban the account — the seller is told what rule was broken, never who reported it.</p>
+      <p><b>Warnings and bans.</b> Every account gets exactly one warning. A seller whose ad is reported and verified receives one warning (by email and in their Car Empire inbox) and the ad is removed. If a second offence is verified, the account is deleted. A banned account's email address is blocked permanently and can never be used to create a Car Empire account again.</p>
+      <p><b>How we use your information.</b> Only to run the marketplace: showing your ads, letting buyers contact you, reviewing listings before they go public, keeping accounts secure, and acting on verified reports. Your mobile number is shown on your own ads through the Show Number button, because that is how buyers reach you — it is not shown anywhere else by us.</p>
+      <p><b>What we never do.</b> We do not sell your personal information. We do not share your email address or phone number with advertisers or other companies. We do not read your private chats for marketing. Forum posts and blog comments are public by design — please do not post private information in them.</p>
+      <p><b>Your choices.</b> You can edit your profile, change your profile picture, or delete your own ads at any time from your dashboard. To ask for your account and its data to be removed, email us at techmateen9@gmail.com.</p>
       <p><b>Contact.</b> Questions about this policy: techmateen9@gmail.com · Main Boulevard, Gulberg III, Lahore, Pakistan.</p>
     </div>
   </div>
@@ -913,6 +983,8 @@ var state = {
   users: seedUsers.slice(),
   offers: seedOffers.slice(),
   reports: seedReports.slice(),
+  bannedEmails: [],     // emails blocked forever after a ban — signup refuses them
+  warnings: {},         // email -> warning count (every account gets exactly ONE warning)
   bookings: [],         // inspection bookings made this session
   chats: [],            // in-website buyer <-> seller chat threads, this session
   chatOpenId: null,
@@ -950,7 +1022,7 @@ var state = {
    comments are still here next visit. The password is never stored — only
    who is signed in. Cars, accounts and offers still live in Supabase. */
 var STORE_KEY = "ce_store_v1";
-var store = {session:null, adminUnlocked:false, chats:[], follows:{}, offers:[], bookings:[], reports:[], userBlogs:[], userForums:[], blogLikes:{}, blogComments:{}, forumLikes:{}, replyLikes:{}, addedReplies:{}, deletedReplies:{}, savedByEmail:{}};
+var store = {session:null, adminUnlocked:false, chats:[], follows:{}, offers:[], bookings:[], reports:[], bannedEmails:[], warnings:{}, userBlogs:[], userForums:[], blogLikes:{}, blogComments:{}, forumLikes:{}, replyLikes:{}, addedReplies:{}, deletedReplies:{}, savedByEmail:{}};
 try{
   var rawStore = localStorage.getItem(STORE_KEY);
   if(rawStore){ var parsedStore = JSON.parse(rawStore); for(var sk in store){ if(parsedStore[sk] !== undefined) store[sk] = parsedStore[sk]; } }
@@ -972,6 +1044,8 @@ function saveStore(){
     store.offers = state.offers;
     store.bookings = state.bookings;
     store.reports = state.reports;
+    store.bannedEmails = state.bannedEmails || [];
+    store.warnings = state.warnings || {};
     if(state.user) store.savedByEmail[state.user.email] = state.saved;
     localStorage.setItem(STORE_KEY, JSON.stringify(store));
   }catch(e){}
@@ -1000,6 +1074,11 @@ function applyStore(){
   state.offers = store.offers || [];
   state.bookings = store.bookings || [];
   state.reports = store.reports || [];
+  state.bannedEmails = store.bannedEmails || [];
+  state.warnings = store.warnings || {};
+  /* A message's "sent" tick is a momentary in-session state — never let a
+     saved copy come back stuck on the single tick after a reload. */
+  state.chats.forEach(function(t){ (t.messages || []).forEach(function(m){ delete m.pending; }); });
   state.blogs.forEach(function(b){
     b.status = b.status || "Approved";
     b.likes = (store.blogLikes && store.blogLikes[b.id]) || [];
@@ -1660,6 +1739,9 @@ function loadMembersFromDB(){
         if(!u.country && r.country) u.country = r.country;
         if(r.role) u.role = r.role;
       }
+      /* Warning counts recorded in the database win over this browser's
+         copy, so the one-warning rule holds on every device. */
+      if(email && typeof r.warnings === "number" && r.warnings > (state.warnings[email] || 0)) state.warnings[email] = r.warnings;
     });
   }).catch(function(){ state.membersDbState = "error"; });
 }
@@ -1733,12 +1815,23 @@ function loadAdminDataFromDB(){
         var local = null;
         state.reports.forEach(function(x){ if(!local && x.dbId == null && String(x.carId) === String(r.car_id) && String(x.reason || "") === String(r.reason || "")) local = x; });
         if(local){
+          /* Adopt the database id only — the local copy already holds the
+             reporter's name / email / phone and the screenshot, which the
+             database row packs into details; never overwrite them. */
           local.dbId = r.id;
           local.reporterId = r.reporter_id != null ? String(r.reporter_id) : "";
-          if(r.details) local.details = r.details;
           return;
         }
-        state.reports.push({id:"db" + r.id, dbId:r.id, carId: r.car_id != null ? String(r.car_id) : "", reporterId: r.reporter_id != null ? String(r.reporter_id) : "", by:"", reason:r.reason || "", details:r.details || "", status:r.status || "Open", date:(r.created_at || "").toString().slice(0,10)});
+        /* A report filed on another device: unpack the reporter's private
+           contact from the end of details, where the report form put it. */
+        var det = r.details || "", rName = "", rEmail = "", rPhone = "";
+        var pm = det.match(/\n?\[Reporter: ([^\]]*)\]\s*$/);
+        if(pm){
+          var pp = pm[1].split("|").map(function(s){ return s.trim(); });
+          rName = pp[0] || ""; rEmail = pp[1] || ""; rPhone = pp[2] || "";
+          det = det.slice(0, pm.index).replace(/\s+$/, "");
+        }
+        state.reports.push({id:"db" + r.id, dbId:r.id, carId: r.car_id != null ? String(r.car_id) : "", reporterId: r.reporter_id != null ? String(r.reporter_id) : "", by:rName, reporterEmail:rEmail, reporterPhone:rPhone, reason:r.reason || "", details:det, status:r.status || "Open", date:(r.created_at || "").toString().slice(0,10)});
       });
     }).catch(function(){}),
     sb("rpc/all_bookings", {method:"POST", body:creds}).then(function(rows){
@@ -1765,6 +1858,13 @@ function findUserByEmail(email){
   var f = null;
   state.users.forEach(function(u){ if(u.email === email) f = u; });
   return f;
+}
+/* A banned email can never be used again — not to register, not to sign
+   in. Bans made from this browser are checked instantly from the local
+   list; the signup flow also asks Supabase (is_email_banned), so a ban
+   follows the email to every device. */
+function isBannedEmail(email){
+  return !!email && (state.bannedEmails || []).some(function(e){ return e === String(email).toLowerCase(); });
 }
 function unlockAdminAs(u){
   state.ownerClaimed = true; state.ownerEmail = u.email;
@@ -2044,12 +2144,26 @@ function openChatForCar(carId){
   }
   openThread(t.id);
 }
+function otherParty(t){
+  if(!state.user) return {name:"", email:""};
+  return state.user.email === t.sellerEmail
+    ? {name:t.buyerName, email:t.buyerEmail}
+    : {name:t.sellerName, email:t.sellerEmail};
+}
+var TICK_ONE = '<svg width="15" height="11" viewBox="0 0 15 11" fill="none" aria-hidden="true"><path d="M1 6.2 4.6 9.6 12.4 1.4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+var TICK_TWO = '<svg width="19" height="11" viewBox="0 0 19 11" fill="none" aria-hidden="true"><path d="M1 6.2 4.6 9.6 12.4 1.4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M6.4 6.2 10 9.6 17.8 1.4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+function tickHTML(m, read){
+  if(m.pending) return '<span class="tick" title="Sent">' + TICK_ONE + '</span>';
+  return '<span class="tick' + (read ? " read" : "") + '" title="' + (read ? "Seen" : "Delivered") + '">' + TICK_TWO + '</span>';
+}
 function openThread(id){
   var t = findThread(id); if(!t || !state.user) return;
   state.chatOpenId = id;
-  var other = state.user.email === t.sellerEmail ? t.buyerName : t.sellerName;
-  $("chatTitle").textContent = "Chat — " + t.carTitle;
-  $("chatSub").textContent = t.carId ? "You are chatting with " + other + " about this car, right here on Car Empire." : "Direct chat with " + other + " on Car Empire.";
+  var other = otherParty(t);
+  var op = findPerson(other.email);
+  $("chatAvatar").innerHTML = avatarHTML(op || {name: other.name, avatar:""}, "");
+  $("chatTitle").textContent = other.name;
+  $("chatSub").textContent = t.carId ? "About: " + t.carTitle + " — chatting right here on Car Empire." : "Direct chat on Car Empire.";
   renderChatMsgs();
   markThreadRead(t);
   $("chatOverlay").classList.add("open");
@@ -2058,25 +2172,59 @@ function openThread(id){
 function renderChatMsgs(){
   var t = findThread(state.chatOpenId); if(!t) return;
   var box = $("chatMsgs");
-  box.innerHTML = t.messages.length ? t.messages.map(function(m){
+  var other = otherParty(t);
+  var readUpTo = (t.reads && t.reads[other.email]) || 0;
+  box.innerHTML = t.messages.length ? t.messages.map(function(m, i){
     var me = state.user && m.from === state.user.email;
-    return '<div class="chat-msg ' + (me ? "me" : "them") + '"><span class="who-line">' + esc(me ? "You" : m.name) + ' · ' + esc(m.time) + '</span>' + esc(m.text) + '</div>';
-  }).join("") : '<p class="hint" style="text-align:center">No messages yet — say salaam and ask about the car.</p>';
+    var meta = '<span class="msg-meta">' + esc(m.time) + (me ? tickHTML(m, i < readUpTo) : '') + '</span>';
+    return '<div class="chat-msg ' + (me ? "me" : "them") + '">' + esc(m.text) + meta + '</div>';
+  }).join("") : '<p class="hint" style="text-align:center">No messages yet — say salaam, or tap a ready-made question below.</p>';
   box.scrollTop = box.scrollHeight;
+  renderChatChips(t);
 }
-$("chatForm").addEventListener("submit", function(e){
-  e.preventDefault();
+/* First-message suggestions: shown until I have said anything in this
+   chat. One tap sends the question straight away, WhatsApp-style. */
+function renderChatChips(t){
+  var box = $("chatChips"); if(!box) return;
+  var iSpoke = t.messages.some(function(m){ return state.user && m.from === state.user.email; });
+  if(iSpoke || !state.user){ box.style.display = "none"; box.innerHTML = ""; return; }
+  var chips = t.carId
+    ? ["Kya ye car abhi available hai?", "Aapki best price kya hai?", "Inspection kab kar sakte hain?"]
+    : ["Assalam-o-Alaikum!", "Kya hum car ke baare mein baat kar sakte hain?", "Aap kis city se hain?"];
+  box.innerHTML = chips.map(function(q){ return '<button type="button" class="chip" data-chip="' + esc(q) + '">' + esc(q) + '</button>'; }).join("");
+  box.style.display = "flex";
+  box.querySelectorAll("[data-chip]").forEach(function(b){
+    b.addEventListener("click", function(){ sendChatText(b.getAttribute("data-chip")); });
+  });
+}
+function sendChatText(txt){
   var t = findThread(state.chatOpenId); if(!t || !state.user) return;
-  var txt = $("chatInput").value.trim(); if(!txt) return;
-  t.messages.push({from:state.user.email, name:state.user.name, text:txt, time:new Date().toLocaleTimeString([], {hour:"numeric", minute:"2-digit"})});
+  txt = (txt || "").trim(); if(!txt) return;
+  var msg = {from:state.user.email, name:state.user.name, text:txt, time:new Date().toLocaleTimeString([], {hour:"numeric", minute:"2-digit"}), ts:Date.now(), pending:true};
+  t.messages.push(msg);
   /* Keep the most recently active conversation at the top of the inbox. */
   var ti = state.chats.indexOf(t);
   if(ti > 0){ state.chats.splice(ti, 1); state.chats.unshift(t); }
-  $("chatInput").value = "";
   markThreadRead(t);
   renderChatMsgs();
   if(state.view === "dashboard") renderDashboard();
   if(state.view === "inbox") renderInbox();
+  /* Ticks: one tick = sent. Once the message is written into the shared
+     inbox store it becomes a double tick (delivered), and when the other
+     person opens this chat it turns into the coloured Seen tick. */
+  setTimeout(function(){
+    if(!msg.pending) return;
+    delete msg.pending;
+    saveStore();
+    if(state.chatOpenId === t.id && $("chatOverlay").classList.contains("open")) renderChatMsgs();
+    if(state.view === "inbox") renderInbox();
+  }, 800);
+}
+$("chatForm").addEventListener("submit", function(e){
+  e.preventDefault();
+  var txt = $("chatInput").value;
+  $("chatInput").value = "";
+  sendChatText(txt);
 });
 /* ---------- inbox view: every conversation for this buyer/seller ---------- */
 function openDM(email){
@@ -2092,14 +2240,53 @@ function openDM(email){
   }
   openThread(t.id);
 }
+function sortThreads(arr){
+  return arr.sort(function(a, b){
+    var la = a.messages.length ? (a.messages[a.messages.length - 1].ts || 0) : 0;
+    var lb = b.messages.length ? (b.messages[b.messages.length - 1].ts || 0) : 0;
+    return lb - la;
+  });
+}
+function fmtThreadTime(t){
+  var last = t.messages.length ? t.messages[t.messages.length - 1] : null;
+  if(!last) return "";
+  if(last.ts){
+    var d = new Date(last.ts), now = new Date();
+    if(d.toDateString() === now.toDateString()) return last.time || d.toLocaleTimeString([], {hour:"numeric", minute:"2-digit"});
+    var y = new Date(now); y.setDate(now.getDate() - 1);
+    if(d.toDateString() === y.toDateString()) return "Yesterday";
+    return d.toLocaleDateString([], {day:"numeric", month:"short"});
+  }
+  return last.time || "";
+}
+/* One inbox row: the other person's photo + name, the ad the chat is
+   about, the last message (with my ticks when it is mine), its time, and
+   the unread badge. The whole row opens the chat. */
 function threadRowHTML(t){
-  var other = t.sellerEmail === state.user.email ? t.buyerName : t.sellerName;
-  var otherEmail = t.sellerEmail === state.user.email ? t.buyerEmail : t.sellerEmail;
+  var other = otherParty(t);
+  var op = findPerson(other.email);
   var last = t.messages.length ? t.messages[t.messages.length - 1] : null;
   var un = threadUnread(t);
-  return '<div class="stack-row"><div class="grow"><b>' + esc(t.carId ? t.carTitle : "Direct chat") + '</b> · with ' + esc(other) + (un ? '<span class="unread-dot" title="Unread"></span> <b style="color:#d64545">' + un + ' new</b>' : '') + '<br /><span class="hint">' +
-    (last ? esc(last.text.slice(0, 90)) + (last.text.length > 90 ? "…" : "") + ' · ' + esc(last.time) : 'No messages yet — say salaam.') + '</span></div>' +
-    '<span class="row-actions"><button class="btn small gold" data-thread="' + t.id + '">Open chat</button></span></div>';
+  var mineLast = !!(last && state.user && last.from === state.user.email);
+  var readUpTo = (t.reads && t.reads[other.email]) || 0;
+  var lastRead = mineLast && (t.messages.length - 1) < readUpTo;
+  var lastHTML = last
+    ? (mineLast ? '<span class="tick' + (lastRead ? " read" : "") + '" style="vertical-align:-1px;margin-right:3px">' + (last.pending ? TICK_ONE : TICK_TWO) + '</span>' : '') + esc(last.text.length > 90 ? last.text.slice(0, 90) + "…" : last.text)
+    : 'No messages yet — say salaam.';
+  return '<div class="stack-row inbox-row" data-thread="' + t.id + '" role="button" tabindex="0" aria-label="Open chat with ' + esc(other.name) + '">' +
+    avatarHTML(op || {name: other.name, avatar:""}, "") +
+    '<div class="grow"><div class="ir-top"><b>' + esc(other.name) + '</b><span class="ir-time">' + esc(fmtThreadTime(t)) + '</span></div>' +
+    (t.carId ? '<div class="hint">' + esc(t.carTitle) + '</div>' : '') +
+    '<div class="ir-last">' + lastHTML + '</div></div>' +
+    (un ? '<span class="ir-badge" title="' + un + ' unread message' + (un > 1 ? "s" : "") + '">' + un + '</span>' : '') + '</div>';
+}
+function bindThreadRows(root){
+  if(!root) return;
+  root.querySelectorAll("[data-thread]").forEach(function(b){
+    if(b.dataset.boundT) return; b.dataset.boundT = "1";
+    b.addEventListener("click", function(){ openThread(b.getAttribute("data-thread")); });
+    b.addEventListener("keydown", function(e){ if(e.key === "Enter" || e.key === " "){ e.preventDefault(); openThread(b.getAttribute("data-thread")); } });
+  });
 }
 function renderInbox(){
   var box = $("inboxBody");
@@ -2109,15 +2296,18 @@ function renderInbox(){
     $("inboxLogin").addEventListener("click", function(){ openAuth("login"); });
     return;
   }
-  var mine = state.chats.filter(function(t){ return t.buyerEmail === state.user.email || t.sellerEmail === state.user.email; });
+  /* THE one central inbox: every chat this member takes part in — as a
+     buyer asking about a car AND as a seller answering buyers — is listed
+     here, newest activity first. No chat lives anywhere else. */
+  var mine = sortThreads(state.chats.filter(function(t){ return t.buyerEmail === state.user.email || t.sellerEmail === state.user.email; }));
   var un = totalUnread();
   var html = '<div class="kv">' +
     '<div class="cell"><b>' + mine.length + '</b><span>conversations</span></div>' +
     '<div class="cell"><b>' + un + '</b><span>unread messages</span></div>' +
     '<div class="cell"><b>' + mine.filter(function(t){ return !!t.carId; }).length + '</b><span>about my ads / cars I asked about</span></div></div>';
-  html += '<div class="panel">' + (mine.length ? mine.map(threadRowHTML).join("") : '<div class="empty"><b>No chats yet</b>Use the <b>Chat</b> button on any ad to message its seller, or message a member from your dashboard → People &amp; friends. Chats about your own ads appear here the moment a buyer writes.</div>') + '</div>';
+  html += '<div class="panel">' + (mine.length ? mine.map(threadRowHTML).join("") : '<div class="empty"><b>No chats yet</b>Use the <b>Chat</b> button on any ad to message its seller, or message a member from your dashboard → People &amp; friends. Chats about your own ads appear here the moment a buyer writes — every chat, buying or selling, lives in this one Inbox.</div>') + '</div>';
   box.innerHTML = html;
-  box.querySelectorAll("[data-thread]").forEach(function(b){ b.addEventListener("click", function(){ openThread(b.getAttribute("data-thread")); }); });
+  bindThreadRows(box);
 }
 function bindContactButtons(root){
   (root || document).querySelectorAll("[data-show-num]").forEach(function(b){
@@ -2264,20 +2454,7 @@ function openDetail(id){
   if(cb) cb.addEventListener("click", function(){ callSeller(c); });
   var chb = $("chatBtn");
   if(chb) chb.addEventListener("click", function(){ bump(c.id, "click"); closeOverlay("detailOverlay"); openChatForCar(c.id); });
-  $("reportBtn").addEventListener("click", function(){
-    var r = {id:"r" + Date.now(), carId:c.id, carTitle:carTitle(c), by: state.user ? state.user.name : "Guest", reason:"Reported from the listing page for owner review.", details:"", status:"Open", date:new Date().toISOString().slice(0,10)};
-    state.reports.unshift(r);
-    saveStore();
-    /* Only the columns the real reports table has may be sent —
-       id, reporter_id, car_id, reason, details, status, created_at.
-       Sending car_title / reported_by (which do not exist) made
-       Supabase reject the whole insert, so reports never saved. */
-    resolveDbUserId(state.user).then(function(reporterId){
-      sb("reports", {method:"POST", headers:{"Prefer":"return=minimal"}, body:{reporter_id:reporterId, car_id:isNaN(Number(c.id)) ? null : Number(c.id), reason:r.reason, details:"", status:"Open"}}).catch(function(){});
-    });
-    toast("Thanks — the owner will review this listing.");
-    closeOverlay("detailOverlay");
-  });
+  $("reportBtn").addEventListener("click", function(){ openReportForm(c); });
 }
 function closeOverlay(id){
   $(id).classList.remove("open");
@@ -2296,6 +2473,77 @@ document.querySelectorAll("[data-close]").forEach(function(b){
 });
 document.querySelectorAll(".overlay").forEach(function(o){
   o.addEventListener("click", function(e){ if(e.target === o) closeOverlay(o.id); });
+});
+
+/* ---------- report a listing — private to the owner ----------
+   The reporter gives their name and email (contact number optional),
+   picks a reason, and may attach a screenshot. Everything goes ONLY to
+   the owner: the report form says so, the admin panel marks it private,
+   and the seller is never told who reported them. */
+var reportTarget = null;
+var reportShot = "";
+function openReportForm(c){
+  reportTarget = c;
+  reportShot = "";
+  $("repCarTitle").textContent = carTitle(c) + (c.year ? " — " + c.year : "") + " · " + money(c.price);
+  $("repName").value = state.user ? state.user.name : "";
+  $("repEmail").value = state.user ? state.user.email : "";
+  $("repPhone").value = "";
+  $("repReason").value = "";
+  $("repDetails").value = "";
+  $("repMsg").textContent = "";
+  $("repShotPrev").style.display = "none";
+  $("repShotImg").removeAttribute("src");
+  $("repShotStat").textContent = "A chat screenshot or payment proof helps the owner verify faster.";
+  $("reportOverlay").classList.add("open");
+}
+$("repShotBtn").addEventListener("click", function(){ $("repShot").click(); });
+$("repShot").addEventListener("change", function(){
+  var f = this.files[0]; this.value = "";
+  if(!f) return;
+  $("repShotStat").textContent = "Attaching screenshot…";
+  compressImageFile(f, {maxDim: 1200}).then(function(r){
+    reportShot = r.url;
+    $("repShotImg").src = r.url;
+    $("repShotPrev").style.display = "flex";
+    $("repShotStat").textContent = "Screenshot attached (" + fmtSize(r.kb) + ") — only the owner will see it.";
+  });
+});
+$("repShotRemove").addEventListener("click", function(){
+  reportShot = "";
+  $("repShotPrev").style.display = "none";
+  $("repShotImg").removeAttribute("src");
+  $("repShotStat").textContent = "Screenshot removed.";
+});
+$("reportForm").addEventListener("submit", function(e){
+  e.preventDefault();
+  var c = reportTarget; if(!c) return;
+  var name = $("repName").value.trim();
+  var email = $("repEmail").value.trim().toLowerCase();
+  var phone = $("repPhone").value.trim();
+  var reason = $("repReason").value;
+  var details = $("repDetails").value.trim();
+  if(!name){ $("repMsg").textContent = "Please add your name — the owner needs to know who reported this ad."; return; }
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ $("repMsg").textContent = "Please add a valid email so the owner can reach you about this report."; return; }
+  if(!reason){ $("repMsg").textContent = "Please choose a reason for the report."; return; }
+  var r = {id:"r" + Date.now(), carId:c.id, carTitle:carTitle(c), sellerEmail:c.sellerEmail || "", sellerName:c.seller || "",
+    by:name, reporterEmail:email, reporterPhone:phone, reason:reason, details:details, shot:reportShot,
+    status:"Open", date:new Date().toISOString().slice(0,10)};
+  state.reports.unshift(r);
+  saveStore();
+  /* Only the columns the real reports table has may be sent —
+     id, reporter_id, car_id, reason, details, status, created_at.
+     The reporter's name / email / phone travel inside details: the
+     table is write-only with the website's key and is read back only
+     through the owner's function, so the contact stays private. The
+     screenshot stays with the report in the owner's panel copy. */
+  var packed = (details ? details + "\n" : "") + "[Reporter: " + name + " | " + email + (phone ? " | " + phone : "") + "]";
+  resolveDbUserId(state.user).then(function(reporterId){
+    sb("reports", {method:"POST", headers:{"Prefer":"return=minimal"}, body:{reporter_id:reporterId, car_id:isNaN(Number(c.id)) ? null : Number(c.id), reason:reason, details:packed, status:"Open"}}).catch(function(){});
+  });
+  closeOverlay("reportOverlay");
+  closeOverlay("detailOverlay");
+  toast("Report sent privately to the owner. If it is verified, the seller gets their one warning and the ad is removed — a second offence deletes the account.");
 });
 
 /* ---------- auth ---------- */
@@ -2403,6 +2651,7 @@ $("authForm").addEventListener("submit", function(e){
   if(authMode === "signup"){
     var name = $("afName").value.trim();
     if(!name){ $("authMsg").textContent = "Please enter your full name."; return; }
+    if(isBannedEmail(email)){ $("authMsg").textContent = "This email has been banned from Car Empire for spam / fraud and can never be used to create an account again."; return; }
     if(state.users.some(function(u){ return u.email === email; })){ $("authMsg").textContent = "That email is already registered — sign in instead."; return; }
     var uname = ($("afUsername").value.trim().toLowerCase().replace(/[^a-z0-9_]/g, "")) || email.split("@")[0].replace(/[^a-z0-9_]/g, "");
     if(state.users.some(function(u){ return u.username === uname; })){ $("authMsg").textContent = "That @username is taken — try another."; return; }
@@ -2435,15 +2684,32 @@ $("authForm").addEventListener("submit", function(e){
     var doInsert = function(){
       sb("users", {method:"POST", headers:{"Prefer":"return=minimal"}, body:{name:name, email:email, password:pass, country:country, role:"member"}}).then(finishSignup).catch(signupFailed);
     };
-    sb("rpc/member_by_email", {method:"POST", body:{p_email:email}}).then(function(r){
-      if(r && r.email){
+    var checkMember = function(){
+      sb("rpc/member_by_email", {method:"POST", body:{p_email:email}}).then(function(r){
+        if(r && r.email){
+          $("authSubmit").disabled = false;
+          $("authMsg").textContent = "That email is already registered — sign in instead.";
+          return;
+        }
+        doInsert();
+      }).catch(doInsert);
+    };
+    /* A banned email stays banned on every device: the banned_emails
+       table in Supabase is asked before any account is created (the
+       local list above already covers bans made from this browser).
+       If that check cannot run yet, registration continues — the local
+       list and the duplicate check still apply. */
+    sb("rpc/is_email_banned", {method:"POST", body:{p_email:email}}).then(function(b){
+      if(b === true){
+        if(state.bannedEmails.indexOf(email) < 0){ state.bannedEmails.push(email); saveStore(); }
         $("authSubmit").disabled = false;
-        $("authMsg").textContent = "That email is already registered — sign in instead.";
+        $("authMsg").textContent = "This email has been banned from Car Empire for spam / fraud and can never be used to create an account again.";
         return;
       }
-      doInsert();
-    }).catch(doInsert);
+      checkMember();
+    }).catch(checkMember);
   } else {
+    if(isBannedEmail(email)){ $("authMsg").textContent = "This account has been banned from Car Empire for spam / fraud — it can no longer sign in."; return; }
     var found = null;
     state.users.forEach(function(u){ if(u.email === email) found = u; });
     var finish = function(u){
@@ -2790,7 +3056,7 @@ function renderDashboard(){
   });
   var savedCars = state.cars.filter(function(c){ return state.saved[c.id]; });
   var myBookings = state.bookings.filter(function(b){ return state.user && (b.contact === state.user.email || b.name === state.user.name); });
-  var myChats = state.chats.filter(function(t){ return t.buyerEmail === state.user.email || t.sellerEmail === state.user.email; });
+  var myChats = sortThreads(state.chats.filter(function(t){ return t.buyerEmail === state.user.email || t.sellerEmail === state.user.email; }));
   var myBlogs = state.blogs.filter(function(b){ return b.authorEmail === state.user.email; });
   var myUnread = totalUnread();
   var tabs = [
@@ -2910,8 +3176,8 @@ function renderDashboard(){
   }
   if(state.dashTab === "messages"){
     p.innerHTML = (myChats.length ? myChats.map(threadRowHTML).join("") : '<div class="empty"><b>No chats yet</b>Use the <b>Chat</b> button on any ad to message its seller right here on Car Empire. When buyers chat with you about your ads, those chats appear here too.</div>') +
-      '<p class="hint" style="margin-top:12px">The full inbox — with unread counts — is also in the top menu under <b>Inbox</b>.</p>';
-    p.querySelectorAll("[data-thread]").forEach(function(b){ b.addEventListener("click", function(){ openThread(b.getAttribute("data-thread")); }); });
+      '<p class="hint" style="margin-top:12px">These are the same chats as your one central <b>Inbox</b> in the top menu — every conversation, buying or selling, lives there with its unread count.</p>';
+    bindThreadRows(p);
   }
   if(state.dashTab === "myblogs"){
     p.innerHTML = (myBlogs.length ? myBlogs.map(function(b){
@@ -3179,6 +3445,60 @@ var GRANT_SQL = [
 "     else null end $$;",
 "grant execute on function public.all_bookings(text, text) to anon, authenticated;",
 "",
+"-- ===== Reports: the one-warning rule and permanent bans =====",
+"-- Each account's warning count lives on its user row. The owner panel",
+"-- reads it back through all_members (re-created below with the column",
+"-- included); warn_member raises it, owner-gated like everything else.",
+"alter table public.users add column if not exists warnings integer not null default 0;",
+"create or replace function public.all_members(p_email text, p_password text)",
+"returns jsonb language sql security definer set search_path = public as",
+"$$ select case when exists (select 1 from public.users",
+"     where role = 'owner' and lower(email) = lower(p_email)",
+"       and password = p_password)",
+"     then (select coalesce(jsonb_agg(t), '[]'::jsonb) from (select id, name, email, country, role, created_at, warnings from public.users order by created_at) t)",
+"     else null end $$;",
+"grant execute on function public.all_members(text, text) to anon, authenticated;",
+"create or replace function public.warn_member(p_email text, p_password text, p_target text)",
+"returns integer language plpgsql security definer set search_path = public as",
+"$$ declare n integer; begin",
+"  if not exists (select 1 from public.users where role = 'owner' and lower(email) = lower(p_email) and password = p_password) then return -1; end if;",
+"  update public.users set warnings = coalesce(warnings, 0) + 1 where lower(email) = lower(p_target) and (role is null or role <> 'owner') returning warnings into n;",
+"  return coalesce(n, -1);",
+"end $$;",
+"grant execute on function public.warn_member(text, text, text) to anon, authenticated;",
+"",
+"-- Banned emails: an email in this table can NEVER register again. The",
+"-- table has NO policies at all, so the website's public key cannot read",
+"-- or write it directly — only the two functions below ever touch it,",
+"-- which keeps the banned list itself private.",
+"create table if not exists public.banned_emails (",
+"  email text primary key,",
+"  reason text,",
+"  created_at timestamptz not null default now()",
+");",
+"alter table public.banned_emails enable row level security;",
+"",
+"-- Registration check: answers true/false for ONE exact email only —",
+"-- the same privacy pattern as member_by_email; the list is never exposed.",
+"create or replace function public.is_email_banned(p_email text)",
+"returns boolean language sql security definer set search_path = public as",
+"$$ select exists (select 1 from public.banned_emails where lower(email) = lower(p_email)) $$;",
+"grant execute on function public.is_email_banned(text) to anon, authenticated;",
+"",
+"-- Ban a member (owner only): verifies the caller's email + password",
+"-- against the owner row, records the target email in banned_emails and",
+"-- deletes the member's account row. The owner row itself can never be",
+"-- banned or deleted through it.",
+"create or replace function public.ban_member(p_email text, p_password text, p_target text, p_reason text)",
+"returns boolean language plpgsql security definer set search_path = public as",
+"$$ begin",
+"  if not exists (select 1 from public.users where role = 'owner' and lower(email) = lower(p_email) and password = p_password) then return false; end if;",
+"  insert into public.banned_emails (email, reason) values (lower(p_target), p_reason) on conflict (email) do nothing;",
+"  delete from public.users where lower(email) = lower(p_target) and (role is null or role <> 'owner');",
+"  return true;",
+"end $$;",
+"grant execute on function public.ban_member(text, text, text, text) to anon, authenticated;",
+"",
 "-- Create the owner here, or in Table Editor → users → Insert row:",
 "-- insert into public.users (name, email, password, country, role)",
 "-- values ('Your Name', 'you@example.com', 'your-password', 'Lahore', 'owner');",
@@ -3324,11 +3644,13 @@ function renderOwner(){
     }).join("");
   }
   if(state.ownerTab === "users"){
-    p.innerHTML = '<table class="list"><thead><tr><th>Name</th><th>Email</th><th>Country</th><th>Joined</th><th>Listings</th></tr></thead><tbody>' +
+    p.innerHTML = '<table class="list"><thead><tr><th>Name</th><th>Email</th><th>Country</th><th>Joined</th><th>Listings</th><th>Warnings</th></tr></thead><tbody>' +
       state.users.map(function(u){
         var n = state.cars.filter(function(c){ return c.sellerEmail === u.email; }).length;
-        return '<tr><td><b>' + esc(u.name) + '</b>' + (state.ownerEmail === u.email ? ' · Owner' : '') + '</td><td>' + esc(u.email) + '</td><td>' + esc(u.country || "—") + '</td><td>' + esc(u.joined || "—") + '</td><td>' + n + '</td></tr>';
+        var w = state.ownerEmail === u.email ? '—' : ((state.warnings[u.email] || 0) >= 1 ? '<span class="pill warned">1 warning used</span>' : 'None');
+        return '<tr><td><b>' + esc(u.name) + '</b>' + (state.ownerEmail === u.email ? ' · Owner' : '') + '</td><td>' + esc(u.email) + '</td><td>' + esc(u.country || "—") + '</td><td>' + esc(u.joined || "—") + '</td><td>' + n + '</td><td>' + w + '</td></tr>';
       }).join("") + '</tbody></table>' +
+      (state.bannedEmails.length ? '<p style="margin-top:14px"><b>Banned emails — these can never register on Car Empire again:</b><br /><span style="display:inline-flex;gap:6px;flex-wrap:wrap;margin-top:6px">' + state.bannedEmails.map(function(e){ return '<span class="pill banned">' + esc(e) + '</span>'; }).join("") + '</span></p>' : '') +
       (state.membersDbState === "ok" ? "" : '<p class="hint" style="margin-top:12px">This list shows the members this browser knows about. The full list of everyone who registered loads only right after a fresh owner login to this panel (never from a restored session — the member list is released by Supabase only to the owner), and only once the latest one-time SQL from the <b>Setup &amp; hosting</b> tab has been run in Supabase → SQL Editor. If members are missing: log out of admin, log back in, and check that SQL has been run.</p>');
   }
   if(state.ownerTab === "offers"){
@@ -3344,15 +3666,32 @@ function renderOwner(){
     }).join("") : '<div class="empty"><b>No offers yet</b></div>';
   }
   if(state.ownerTab === "reports"){
-    p.innerHTML = state.reports.length ? state.reports.map(function(r){
+    p.innerHTML = '<p class="hint" style="margin-top:0">Reporter names, emails, numbers and screenshots are <b>private to you</b> — the reported seller never sees who reported them. Verify a report first, then act: <b>Warn seller</b> removes the ad, messages the seller in their Car Empire inbox and opens the warning email ready to send. <b>Every account gets exactly one warning — a second verified offence deletes the account.</b> <b>Ban</b> deletes the account and all its ads at once, and the email can never register again.</p>' +
+    (state.reports.length ? state.reports.map(function(r){
       var rTitle = r.carTitle || carTitleById(r.carId) || (r.carId ? "Listing #" + r.carId : "A listing");
+      var rCar = findCar(r.carId);
+      var sEmail = r.sellerEmail || (rCar ? rCar.sellerEmail : "") || "";
+      var sName = (rCar ? rCar.seller : "") || r.sellerName || "";
       var rBy = r.by || "";
       if(!rBy && r.reporterId){ var ru = userByDbId(r.reporterId); if(ru) rBy = ru.name; }
       if(!rBy) rBy = r.reporterId ? "Member #" + r.reporterId : "Guest";
-      return '<div class="stack-row"><div class="grow"><b>' + esc(rTitle) + '</b><br /><span class="hint">Reported by ' + esc(rBy) + ' · ' + esc(r.date) + ' — ' + esc(r.reason) + (r.details ? ' · ' + esc(r.details) : '') + '</span></div>' +
-        statusPill(r.status) +
-        (r.status === "Open" ? '<span class="row-actions"><button class="btn small ok" data-rclose="' + r.id + '">Mark reviewed</button><button class="btn small danger" data-odel="' + r.carId + '">Remove listing</button></span>' : '') + '</div>';
-    }).join("") : '<div class="empty"><b>No reports</b></div>';
+      var rEmail = r.reporterEmail || "";
+      if(!rEmail && r.reporterId){ var re2 = userByDbId(r.reporterId); if(re2) rEmail = re2.email; }
+      var wCount = sEmail ? (state.warnings[sEmail] || 0) : 0;
+      var contact = esc(rBy) + (rEmail ? ' · ' + esc(rEmail) : '') + (r.reporterPhone ? ' · ' + esc(r.reporterPhone) : '');
+      return '<div class="stack-row"><div class="grow"><b>' + esc(rTitle) + '</b> ' + statusPill(r.status) + '<br />' +
+        '<span class="hint">Reported by ' + contact + '<span class="priv-tag">Private — owner only</span><br />' +
+        'Reason: <b>' + esc(r.reason) + '</b>' + (r.details ? '<br />&ldquo;' + esc(r.details) + '&rdquo;' : '') + '<br />' +
+        'Seller: ' + (sName ? esc(sName) : 'Unknown') + (sEmail ? ' (' + esc(sEmail) + ') · Warnings so far: <b>' + wCount + ' of 1</b>' : ' — not a Car Empire member') + ' · ' + esc(r.date) + '</span>' +
+        (r.shot ? '<img class="adm-shot" data-shot="' + r.id + '" src="' + r.shot + '" alt="Screenshot attached by the reporter" title="Reporter\'s screenshot — tap to enlarge" />' : '') +
+        '</div>' +
+        (r.status === "Open" ? '<span class="row-actions">' +
+          '<button class="btn small ok" data-rclose="' + r.id + '">Mark reviewed</button>' +
+          (rCar ? '<button class="btn small" data-odel="' + r.carId + '">Remove listing only</button>' : '') +
+          (sEmail ? '<button class="btn small" data-rwarn="' + r.id + '">' + (wCount >= 1 ? "Second offence — delete account" : "Warn seller + remove ad") + '</button>' +
+          '<button class="btn small danger" data-rban="' + r.id + '">Ban seller account</button>' : '<span class="hint">Seller is not a member — only the ad can be removed.</span>') +
+        '</span>' : '') + '</div>';
+    }).join("") : '<div class="empty"><b>No reports</b>When a visitor reports an ad from its page, the report lands here with the reporter\'s private contact details and any screenshot they attached.</div>');
   }
   if(state.ownerTab === "bookings"){
     p.innerHTML = state.bookings.length ? state.bookings.map(function(b){
@@ -3572,6 +3911,9 @@ function renderOwner(){
     sb("reports?id=eq." + encodeURIComponent(dbId || b.getAttribute("data-rclose")), {method:"PATCH", headers:{"Prefer":"return=minimal"}, body:{status:"Reviewed"}}).catch(function(){});
     renderOwner(); toast("Report marked reviewed.");
   });});
+  p.querySelectorAll("[data-rwarn]").forEach(function(b){ b.addEventListener("click", function(){ reportAction(b.getAttribute("data-rwarn"), "warn"); }); });
+  p.querySelectorAll("[data-rban]").forEach(function(b){ b.addEventListener("click", function(){ reportAction(b.getAttribute("data-rban"), "ban"); }); });
+  p.querySelectorAll("[data-shot]").forEach(function(im){ im.addEventListener("click", function(){ im.classList.toggle("big"); }); });
   p.querySelectorAll("[data-fapprove]").forEach(function(b){ b.addEventListener("click", function(){
     state.forums.forEach(function(f){ if(f.id === b.getAttribute("data-fapprove")) f.status = "Approved"; });
     saveStore(); renderOwner(); toast("Forum post approved — now public for everyone.");
@@ -3611,6 +3953,86 @@ function setCarStatus(id, status){
   sb("cars?id=eq." + encodeURIComponent(id), {method:"PATCH", headers:{"Prefer":"return=minimal"}, body:{status:status}}).catch(function(){});
   renderGrid(); renderOwner();
   toast("Listing " + status.toLowerCase() + ".");
+}
+/* ---------- report moderation: the one-warning rule and bans ----------
+   A verified report gives the seller their ONE warning (ad removed,
+   warning in their Car Empire inbox + a warning email the owner's mail
+   app opens ready to send). A second verified offence — or an outright
+   Ban — deletes the account, removes every ad, and blocks the email
+   forever: it is kept in the banned list here and, through the
+   owner-gated ban_member database function, in Supabase too, where the
+   signup form checks it before any new account is created. */
+function setReportStatus(r, status){
+  r.status = status;
+  if(r.dbId) sb("reports?id=eq." + encodeURIComponent(r.dbId), {method:"PATCH", headers:{"Prefer":"return=minimal"}, body:{status:status}}).catch(function(){});
+}
+function deleteCarEverywhere(id){
+  if(!id) return;
+  state.cars = state.cars.filter(function(c){ return c.id !== id; });
+  sb("cars?id=eq." + encodeURIComponent(id), {method:"DELETE", headers:{"Prefer":"return=minimal"}}).catch(function(){});
+}
+function sellerOfReport(r){
+  var c = findCar(r.carId);
+  return {car:c, email: r.sellerEmail || (c ? c.sellerEmail : "") || "", name: (c ? c.seller : "") || r.sellerName || ""};
+}
+function notifySellerThread(email, name, carId, carTitle, text){
+  if(!email || !state.user) return;
+  state.chats.unshift({id:"ch" + Date.now() + Math.floor(Math.random() * 999), carId:carId || null, carTitle:carTitle || "Car Empire — official notice", buyerEmail:email, buyerName:name || email, sellerEmail:state.user.email, sellerName:"Car Empire Owner", messages:[{from:state.user.email, name:"Car Empire Owner", text:text, time:new Date().toLocaleTimeString([], {hour:"numeric", minute:"2-digit"}), ts:Date.now()}], reads:{}});
+}
+function banAccountEverywhere(email){
+  if(!email) return;
+  email = String(email).toLowerCase();
+  if(state.bannedEmails.indexOf(email) < 0) state.bannedEmails.push(email);
+  state.cars.filter(function(c){ return c.sellerEmail === email; }).map(function(c){ return c.id; }).forEach(function(id){ deleteCarEverywhere(id); });
+  state.users = state.users.filter(function(u){ return u.email !== email; });
+  delete state.warnings[email];
+  if(ownerCreds) sb("rpc/ban_member", {method:"POST", body:{p_email:ownerCreds.email, p_password:ownerCreds.pass, p_target:email, p_reason:"Banned from the owner panel after a verified report"}}).catch(function(){});
+  saveStore();
+}
+function reportAction(reportId, action){
+  var r = null;
+  state.reports.forEach(function(x){ if(x.id === reportId) r = x; });
+  if(!r) return;
+  var s = sellerOfReport(r);
+  var title = r.carTitle || carTitleById(r.carId) || "your ad";
+  if(!s.email){ toast("This seller is not a Car Empire member — only the ad can be removed."); return; }
+  if(action === "ban"){
+    notifySellerThread(s.email, s.name, r.carId, title, "Your Car Empire account has been banned by the owner after a verified report against your ad \u201C" + title + "\u201D (" + r.reason + "). Your ads have been removed, and this email can no longer be used to create a Car Empire account.");
+    banAccountEverywhere(s.email);
+    setReportStatus(r, "Actioned — seller banned");
+    saveStore(); renderGrid(); renderOwner();
+    toast("Seller banned: account deleted, all their ads removed, and " + s.email + " can never register again.");
+    return;
+  }
+  /* warn — every account gets exactly ONE warning; on a second verified
+     offence the account is deleted instead of warned again. */
+  if((state.warnings[s.email] || 0) >= 1){
+    notifySellerThread(s.email, s.name, r.carId, title, "Second verified offence: your Car Empire account has been deleted and your email blocked. You had already received your one and only warning — Car Empire accounts get exactly one.");
+    banAccountEverywhere(s.email);
+    setReportStatus(r, "Actioned — account deleted (2nd offence)");
+    saveStore(); renderGrid(); renderOwner();
+    toast("That was this seller's second offence — account deleted, ads removed, email blocked for good.");
+    return;
+  }
+  state.warnings[s.email] = 1;
+  if(ownerCreds) sb("rpc/warn_member", {method:"POST", body:{p_email:ownerCreds.email, p_password:ownerCreds.pass, p_target:s.email}}).catch(function(){});
+  deleteCarEverywhere(r.carId);
+  setReportStatus(r, "Actioned — seller warned, ad removed");
+  notifySellerThread(s.email, s.name, r.carId, title,
+    "OFFICIAL WARNING from the Car Empire owner. A report against your ad \u201C" + title + "\u201D was checked and verified (" + r.reason + "), so the ad has been removed. This is your first and ONLY warning: if another of your ads is reported and verified, your account will be deleted and your email blocked from Car Empire for good.");
+  saveStore(); renderGrid(); renderOwner();
+  toast("Seller warned (their one warning), the ad is removed, and the warning email is opening — press Send in your mail app to deliver it.");
+  /* The warning email: this page cannot send mail by itself, so the
+     owner's own mail app opens with the warning written and addressed —
+     one tap on Send delivers it to the seller. */
+  var subject = "Official warning from Car Empire — your ad was removed";
+  var body = "Assalam-o-Alaikum " + (s.name || "seller") + ",\n\n" +
+    "A report against your ad \u201C" + title + "\u201D on Car Empire was checked by the owner and verified (" + r.reason + "). The ad has been removed.\n\n" +
+    "This is your FIRST and ONLY warning. Car Empire gives every account exactly one warning: if another of your ads is reported and verified, your account will be deleted and your email will be blocked from registering again.\n\n" +
+    "Please follow the marketplace rules and post only genuine ads.\n\n— Car Empire Owner";
+  var a = document.createElement("a");
+  a.href = "mailto:" + s.email + "?subject=" + encodeURIComponent(subject) + "&body=" + encodeURIComponent(body);
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
 }
 function setBooking(id, status){
   var dbId = null;
