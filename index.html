@@ -563,6 +563,11 @@
   </section>
 
   <section class="block wrap">
+    <div class="sec-head"><h2>From the blog &amp; community</h2><p>Buying guides, comparisons and owner discussions — free for everyone to read.</p></div>
+    <div id="homeCommunity"></div>
+  </section>
+
+  <section class="block wrap">
     <div class="sec-head"><h2>How Car Empire works</h2></div>
     <div class="steps">
       <div class="step"><div class="n">1</div><h3>Register &amp; post</h3><p>Create your free account and post your car with photos, price and city. Your ad is saved to your own dashboard.</p></div>
@@ -842,7 +847,7 @@
    ============================================================ */
 var SUPABASE_URL = "https://vpqfquftwqoticqitdyv.supabase.co";
 var SUPABASE_KEY = "sb_publishable_tkhgJU7WOrVKNM3tXZFH-w_yNzeOIMe";
-var TABLES = ["users","cars","car_images","favorites","reports","offers"];
+var TABLES = ["users","cars","car_images","favorites","reports","offers","bookings"];
 
 var CITIES = ["Lahore","Karachi","Islamabad","Rawalpindi","Faisalabad","Multan","Peshawar","Quetta","Sialkot","Gujranwala","Hyderabad","Bahawalpur","Sargodha","Abbottabad","Other city"];
 var COUNTRIES = CITIES; /* city list — Pakistan only */
@@ -919,6 +924,7 @@ var state = {
   bookings: [],         // inspection bookings made this session
   chats: [],            // in-website buyer <-> seller chat threads, this session
   chatOpenId: null,
+  detailBlogId: null,   // blog currently open in the reader overlay, if any
   adminMode: false,     // true when the page was opened at /admin — website hidden, panel only
   blogs: seedBlogs.slice(),
   forums: seedForums.slice(),
@@ -950,7 +956,7 @@ var state = {
    comments are still here next visit. The password is never stored — only
    who is signed in. Cars, accounts and offers still live in Supabase. */
 var STORE_KEY = "ce_store_v1";
-var store = {session:null, adminUnlocked:false, chats:[], follows:{}, userBlogs:[], userForums:[], blogLikes:{}, blogComments:{}, forumLikes:{}, replyLikes:{}, addedReplies:{}, deletedReplies:{}, savedByEmail:{}};
+var store = {session:null, adminUnlocked:false, chats:[], follows:{}, offers:[], bookings:[], reports:[], userBlogs:[], userForums:[], blogLikes:{}, blogComments:{}, forumLikes:{}, replyLikes:{}, addedReplies:{}, deletedReplies:{}, savedByEmail:{}};
 try{
   var rawStore = localStorage.getItem(STORE_KEY);
   if(rawStore){ var parsedStore = JSON.parse(rawStore); for(var sk in store){ if(parsedStore[sk] !== undefined) store[sk] = parsedStore[sk]; } }
@@ -969,6 +975,9 @@ function saveStore(){
     store.adminUnlocked = !!state.adminUnlocked;
     store.chats = state.chats;
     store.follows = state.follows;
+    store.offers = state.offers;
+    store.bookings = state.bookings;
+    store.reports = state.reports;
     if(state.user) store.savedByEmail[state.user.email] = state.saved;
     localStorage.setItem(STORE_KEY, JSON.stringify(store));
   }catch(e){}
@@ -990,6 +999,13 @@ function applyStore(){
   state.chats = store.chats || [];
   state.chats.forEach(function(t){ t.reads = t.reads || {}; });
   state.follows = store.follows || {};
+  /* Offers, bookings and reports used to live only in page memory, so a
+     reload wiped the seller's offers, the buyer's bookings and the
+     owner's report queue even in the same browser. They persist here
+     now, and the owner panel also reads them back from Supabase. */
+  state.offers = store.offers || [];
+  state.bookings = store.bookings || [];
+  state.reports = store.reports || [];
   state.blogs.forEach(function(b){
     b.status = b.status || "Approved";
     b.likes = (store.blogLikes && store.blogLikes[b.id]) || [];
@@ -1096,6 +1112,11 @@ function bindFollowBtns(root){
       if(state.view === "dashboard") renderDashboard();
       else if(state.view === "forums") renderForums();
       else if(state.view === "blogs") renderBlogs();
+      /* If a blog article is open in the reader overlay, refresh it too —
+         otherwise its Follow button keeps the old label, the follow looks
+         like it did nothing, and a second tap silently undoes it. */
+      var dov = $("detailOverlay");
+      if(dov && dov.classList.contains("open") && state.detailBlogId) openBlog(state.detailBlogId, true);
     });
   });
 }
@@ -1107,7 +1128,17 @@ function threadUnread(t){
   t.messages.forEach(function(m, i){ if(i >= seen && m.from !== state.user.email) n++; });
   return n;
 }
-function totalUnread(){ return state.chats.reduce(function(a, t){ return a + threadUnread(t); }, 0); }
+/* Unread counts are strictly per member: only threads the signed-in member
+   actually takes part in (as buyer or seller) count toward their badge.
+   Chats live in one shared browser store, so without this check every
+   account would see everybody else's unread messages — and could never
+   clear them, because those threads are not theirs to open. */
+function totalUnread(){
+  if(!state.user) return 0;
+  return state.chats.reduce(function(a, t){
+    return a + ((t.buyerEmail === state.user.email || t.sellerEmail === state.user.email) ? threadUnread(t) : 0);
+  }, 0);
+}
 function updateInboxBadge(){
   var c = $("inboxCnt"); if(!c) return;
   var n = state.user ? totalUnread() : 0;
@@ -1385,6 +1416,9 @@ function createRichEditor(mount, opts){
   };
 }
 function carTitle(c){ return c.brand + " " + c.model; }
+/* Location line for an ad: area first, then city, skipping whichever is
+   empty — never a stray comma or a leading " , " when the area is blank. */
+function locText(c){ return [c.city, c.country].filter(function(x){ return x && String(x).trim(); }).join(", "); }
 function findCar(id){ for(var i=0;i<state.cars.length;i++) if(state.cars[i].id===id) return state.cars[i]; return null; }
 function initials(name){ return (name||"?").split(" ").map(function(w){return w.charAt(0);}).slice(0,2).join("").toUpperCase(); }
 function avatarHTML(person, cls){
@@ -1505,6 +1539,7 @@ function showView(v){
   });
   var navs = document.querySelectorAll("nav.main button");
   navs.forEach(function(b){ b.classList.toggle("active", b.getAttribute("data-nav") === v); });
+  if(v === "home" && typeof renderHomeCommunity === "function") renderHomeCommunity();
   if(v === "dashboard") renderDashboard();
   if(v === "owner") renderOwner();
   if(v === "blogs") renderBlogs();
@@ -1537,6 +1572,10 @@ function enterAdminMode(){
   /* Always pull the freshest ads when the panel opens, so a seller's new
      submission is sitting in Approvals even if this tab was opened earlier. */
   loadFromSupabase().then(function(){ if(state.adminMode) renderAdminPage(); });
+  /* …and the freshest member list, so Admin → Users shows everyone who
+     registered on the website, not just members this browser has met. */
+  loadMembersFromDB().then(function(){ if(state.adminMode) renderAdminPage(); });
+  loadAdminDataFromDB().then(function(){ if(state.adminMode) renderAdminPage(); });
 }
 /* ---------- the ONE owner: lives only in Supabase (users table, role = 'owner') ----------
    The website NEVER creates or deletes the owner account — that happens only in
@@ -1568,6 +1607,84 @@ function fetchOwnerFromDB(){
     return null;
   });
 }
+/* ---------- every registered member, for the owner panel ----------
+   The users table is NOT publicly listable (its read policy returns only
+   the owner row, so passwords can never be harvested), which is why the
+   Admin → Users tab used to show only the handful of members this browser
+   already knew about. The full list comes from the all_members database
+   function instead. That function is owner-gated inside the database: it
+   checks the email + password it is given against the owner row and
+   returns the list only to the owner — anyone else gets nothing, so the
+   member list cannot be harvested with the website's public key. It
+   returns non-secret fields only (id, name, email, city, role, joined) —
+   never passwords. Results are merged into state.users by email, so
+   nobody is missed and nobody is duplicated. */
+/* The owner's credentials, kept in memory only for this session (never
+   written to the browser store) so the member list can be requested with
+   proof of ownership. Set at admin login; cleared on logout. */
+var ownerCreds = null;
+function loadMembersFromDB(){
+  if(!ownerCreds){
+    if(state.membersDbState !== "ok") state.membersDbState = "locked";
+    return Promise.resolve();
+  }
+  return sb("rpc/all_members", {method:"POST", body:{p_email:ownerCreds.email, p_password:ownerCreds.pass}}).then(function(rows){
+    if(!rows){ state.membersDbState = "denied"; return; }
+    state.membersDbState = "ok";
+    if(!rows.length) return;
+    rows.forEach(function(r){
+      var email = String(r.email || "").toLowerCase();
+      if(!email) return;
+      var u = findUserByEmail(email);
+      if(!u){
+        state.users.push({id:String(r.id), name:r.name || email.split("@")[0], username:"", avatar:"", email:email, pass:"", country:r.country || "", joined:(r.created_at || "").toString().slice(0,10), role:r.role || "member"});
+      } else {
+        if(!u.joined && r.created_at) u.joined = String(r.created_at).slice(0,10);
+        if(!u.country && r.country) u.country = r.country;
+        if(r.role) u.role = r.role;
+      }
+    });
+  }).catch(function(){ state.membersDbState = "error"; });
+}
+/* ---------- offers, reports and bookings, read back for the owner ----------
+   Those tables are write-only with the website's public key (buyer
+   details stay private), so the admin panel reads them through the
+   all_offers / all_reports / all_bookings database functions — each one
+   checks the owner's email + password inside Supabase before returning
+   anything, exactly like all_members. Rows are merged into state by a
+   fingerprint, keeping the database id so status changes can be written
+   back to the right row. */
+function loadAdminDataFromDB(){
+  if(!ownerCreds) return Promise.resolve();
+  var creds = {p_email:ownerCreds.email, p_password:ownerCreds.pass};
+  var jobs = [
+    sb("rpc/all_offers", {method:"POST", body:creds}).then(function(rows){
+      if(!rows) return;
+      rows.forEach(function(r){
+        var key = String(r.buyer_email || "") + "|" + String(r.car_title || "") + "|" + Number(r.amount || 0);
+        if(state.offers.some(function(o){ return (String(o.buyerEmail || "") + "|" + String(o.carTitle || "") + "|" + Number(o.amount || 0)) === key; })) return;
+        state.offers.push({id:"db" + r.id, dbId:r.id, carId: r.car_id != null ? String(r.car_id) : "", carTitle:r.car_title || "", buyer:r.buyer_name || "", buyerEmail:r.buyer_email || "", amount:Number(r.amount || 0), status:r.status || "Pending", date:(r.created_at || "").toString().slice(0,10)});
+      });
+    }).catch(function(){}),
+    sb("rpc/all_reports", {method:"POST", body:creds}).then(function(rows){
+      if(!rows) return;
+      rows.forEach(function(r){
+        var key = String(r.car_title || "") + "|" + String(r.reported_by || "") + "|" + String(r.reason || "");
+        if(state.reports.some(function(x){ return (String(x.carTitle || "") + "|" + String(x.by || "") + "|" + String(x.reason || "")) === key; })) return;
+        state.reports.push({id:"db" + r.id, dbId:r.id, carId: r.car_id != null ? String(r.car_id) : "", carTitle:r.car_title || "", by:r.reported_by || "", reason:r.reason || "", status:r.status || "Open", date:(r.created_at || "").toString().slice(0,10)});
+      });
+    }).catch(function(){}),
+    sb("rpc/all_bookings", {method:"POST", body:creds}).then(function(rows){
+      if(!rows) return;
+      rows.forEach(function(r){
+        var key = String(r.car_title || "") + "|" + String(r.contact || "") + "|" + String(r.date || "") + "|" + String(r.time || "");
+        if(state.bookings.some(function(x){ return (String(x.carTitle || "") + "|" + String(x.contact || "") + "|" + String(x.date || "") + "|" + String(x.time || "")) === key; })) return;
+        state.bookings.push({id:"db" + r.id, dbId:r.id, carId: r.car_id != null ? String(r.car_id) : "", carTitle:r.car_title || "", name:r.name || "", contact:r.contact || "", date:r.date || "", time:r.time || "", status:r.status || "Booked"});
+      });
+    }).catch(function(){})
+  ];
+  return Promise.all(jobs).then(function(){ saveStore(); });
+}
 /* Owner password check, done inside Supabase: the check_owner_login database
    function receives the password in a POST body and returns only true/false.
    The password column is never read into the browser, and if the function is
@@ -1589,6 +1706,11 @@ function unlockAdminAs(u){
   saveStore(); updateInboxBadge();
   renderAuthArea();
   renderAdminPage();
+  /* Pull the live ads and the full member list the moment the panel
+     unlocks, so Approvals and Users are never stale. */
+  loadFromSupabase().then(function(){ if(state.adminMode) renderAdminPage(); });
+  loadMembersFromDB().then(function(){ if(state.adminMode) renderAdminPage(); });
+  loadAdminDataFromDB().then(function(){ if(state.adminMode) renderAdminPage(); });
   toast("Welcome, " + u.name.split(" ")[0] + " — admin panel unlocked. Only you control this page.");
 }
 function renderAdminPage(){
@@ -1639,6 +1761,7 @@ $("adminLoginForm").addEventListener("submit", function(e){
         return;
       }
       msg.textContent = "";
+      ownerCreds = {email: email, pass: pass};
       unlockAdminAs(owner);
     }, function(){
       msg.textContent = "Could not check Supabase right now. Make sure the one-time SQL shown below this form has been run in Supabase → SQL Editor and check your connection, then try again.";
@@ -1649,7 +1772,7 @@ $("adminLoginForm").addEventListener("submit", function(e){
 });
 $("adminCopySql").addEventListener("click", function(){ copyText(GRANT_SQL, "SQL copied — paste it in Supabase → SQL Editor and run it."); });
 $("adminLogout").addEventListener("click", function(){
-  state.adminUnlocked = false; state.user = null; state.saved = {};
+  state.adminUnlocked = false; state.user = null; state.saved = {}; ownerCreds = null;
   saveStore(); updateInboxBadge();
   renderAuthArea(); renderAdminPage();
   toast("Logged out of the admin panel.");
@@ -1713,6 +1836,17 @@ function bump(id, kind){
   document.querySelectorAll('[data-views-for="' + id + '"]').forEach(function(el){ el.textContent = c.views; });
   document.querySelectorAll('[data-clicks-for="' + id + '"]').forEach(function(el){ el.textContent = c.clicks; });
   /* ad views/clicks are private — shown only in the creator dashboard & admin analytics */
+  /* Persist the counter to Supabase for database ads, so the dashboard and
+     analytics numbers survive a reload instead of resetting to the values
+     the ad was loaded with. */
+  if(/^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(String(id))){
+    var patch = {};
+    if(kind === "view") patch.views = c.views;
+    if(kind === "click") patch.clicks = c.clicks;
+    if(patch.views !== undefined || patch.clicks !== undefined){
+      sb("cars?id=eq." + encodeURIComponent(id), {method:"PATCH", headers:{"Prefer":"return=minimal"}, body:patch}).catch(function(){});
+    }
+  }
 }
 function totalViews(){ return state.cars.reduce(function(a,c){ return a + (c.views||0); }, 0); }
 function totalClicks(){ return state.cars.reduce(function(a,c){ return a + (c.clicks||0); }, 0); }
@@ -1953,6 +2087,7 @@ function openDetail(id){
   var c = findCar(id); if(!c) return;
   bump(id, "view");
   detailId = id;
+  state.detailBlogId = null;
   $("dTitle").textContent = carTitle(c) + " — " + c.year;
   var img = $("dImg");
   if(c.img){ img.src = c.img; img.alt = carTitle(c); img.style.display = "block"; }
@@ -1962,7 +2097,7 @@ function openDetail(id){
     '<div style="display:flex;gap:12px;align-items:baseline;flex-wrap:wrap">' +
       '<span class="price" style="font-size:28px;font-weight:800;color:var(--gold-ink)">' + money(c.price) + '</span>' +
       '<span class="pill ' + c.status.toLowerCase() + '">' + esc(c.status) + '</span>' +
-      '<span class="loc">' + esc(c.city) + ', ' + esc(c.country) + '</span></div>' +
+      '<span class="loc">' + esc(locText(c)) + '</span></div>' +
     '<div class="specs">' +
       '<div class="sp"><span>Year</span><b>' + esc(c.year) + '</b></div>' +
       '<div class="sp"><span>Mileage</span><b>' + fmtKm(c.km) + '</b></div>' +
@@ -2027,6 +2162,7 @@ function openDetail(id){
       if(!amt || amt < 100){ toast("Enter an offer amount first."); return; }
       var offer = {id:"o" + Date.now(), carId:c.id, carTitle:carTitle(c), buyer:state.user.name, buyerEmail:state.user.email, amount:amt, status:"Pending", date:new Date().toISOString().slice(0,10)};
       state.offers.unshift(offer);
+      saveStore();
       sb("offers", {method:"POST", headers:{"Prefer":"return=minimal"}, body:{car_id:isNaN(Number(c.id)) ? null : Number(c.id), car_title:offer.carTitle, buyer_name:offer.buyer, buyer_email:offer.buyerEmail, amount:amt, status:"Pending"}}).catch(function(){});
       toast("Offer sent to " + c.seller + ".");
       closeOverlay("detailOverlay");
@@ -2039,6 +2175,8 @@ function openDetail(id){
           date = $("inspDate").value, time = $("inspTime").value;
       if(!name || !contact || !date){ toast("Add your name, contact and a date for the inspection."); return; }
       state.bookings.unshift({id:"b" + Date.now(), carId:c.id, carTitle:carTitle(c), name:name, contact:contact, date:date, time:time, status:"Booked"});
+      saveStore();
+      sb("bookings", {method:"POST", headers:{"Prefer":"return=minimal"}, body:{car_id:String(c.id), car_title:carTitle(c), name:name, contact:contact, date:date, time:time || null, status:"Booked"}}).catch(function(){});
       toast("Inspection booked for " + date + ". The seller will confirm with you.");
       closeOverlay("detailOverlay");
     });
@@ -2059,6 +2197,7 @@ function openDetail(id){
   $("reportBtn").addEventListener("click", function(){
     var r = {id:"r" + Date.now(), carId:c.id, carTitle:carTitle(c), by: state.user ? state.user.name : "Guest", reason:"Reported from the listing page for owner review.", status:"Open", date:new Date().toISOString().slice(0,10)};
     state.reports.unshift(r);
+    saveStore();
     sb("reports", {method:"POST", headers:{"Prefer":"return=minimal"}, body:{car_id:isNaN(Number(c.id)) ? null : Number(c.id), car_title:r.carTitle, reported_by:r.by, reason:r.reason, status:"Open"}}).catch(function(){});
     toast("Thanks — the owner will review this listing.");
     closeOverlay("detailOverlay");
@@ -2078,7 +2217,7 @@ function renderAuthArea(){
   var a = $("authArea");
   var na = $("navAuth");
   var doLogout = function(){
-    state.user = null; state.saved = {}; state.adminUnlocked = false;
+    state.user = null; state.saved = {}; state.adminUnlocked = false; ownerCreds = null;
     saveStore(); updateInboxBadge();
     renderAuthArea(); renderGrid(); showView("home"); toast("Logged out.");
   };
@@ -2180,21 +2319,50 @@ $("authForm").addEventListener("submit", function(e){
     if(state.users.some(function(u){ return u.email === email; })){ $("authMsg").textContent = "That email is already registered — sign in instead."; return; }
     var uname = ($("afUsername").value.trim().toLowerCase().replace(/[^a-z0-9_]/g, "")) || email.split("@")[0].replace(/[^a-z0-9_]/g, "");
     if(state.users.some(function(u){ return u.username === uname; })){ $("authMsg").textContent = "That @username is taken — try another."; return; }
-    var nu = {id:"u" + Date.now(), name:name, username:uname, avatar:state.pendingAvatar || "", email:email, pass:pass, country:$("afCountry").value || "Lahore", joined:new Date().toISOString().slice(0,10)};
-    state.users.push(nu);
-    state.user = {id:nu.id, name:nu.name, username:nu.username, avatar:nu.avatar, email:nu.email, country:nu.country, isOwner:false};
-    state.saved = (store.savedByEmail && store.savedByEmail[email]) || {};
-    saveStore(); updateInboxBadge();
-    sb("users", {method:"POST", headers:{"Prefer":"return=minimal"}, body:{name:name, email:email, password:pass, country:nu.country}}).catch(function(){});
-    closeOverlay("authOverlay"); renderAuthArea(); renderGrid();
-    toast("Welcome to Car Empire, " + name.split(" ")[0] + "! Your account is ready.");
-    showView("dashboard");
+    var country = $("afCountry").value || "Lahore";
+    /* The account must exist in Supabase, not just in this browser. An
+       earlier version fired the save without waiting, swallowed any error
+       and sent no role — the database rejected the row (its role rule),
+       so the account quietly vanished: after logging out, sign-in said
+       "No account found" and the same email could register all over again.
+       Now: check the database for a duplicate first, save the row with
+       role "member", and only sign the member in once the save has
+       actually gone through. */
+    $("authMsg").textContent = "Creating your account…";
+    $("authSubmit").disabled = true;
+    var finishSignup = function(){
+      $("authSubmit").disabled = false;
+      var nu = {id:"u" + Date.now(), name:name, username:uname, avatar:state.pendingAvatar || "", email:email, pass:pass, country:country, joined:new Date().toISOString().slice(0,10)};
+      state.users.push(nu);
+      state.user = {id:nu.id, name:nu.name, username:nu.username, avatar:nu.avatar, email:nu.email, country:nu.country, isOwner:false};
+      state.saved = (store.savedByEmail && store.savedByEmail[email]) || {};
+      saveStore(); updateInboxBadge();
+      closeOverlay("authOverlay"); renderAuthArea(); renderGrid();
+      toast("Welcome to Car Empire, " + name.split(" ")[0] + "! Your account is ready.");
+      showView("dashboard");
+    };
+    var signupFailed = function(){
+      $("authSubmit").disabled = false;
+      $("authMsg").textContent = "Your account could not be saved — check your connection and try again. Nothing was created, so you can register with the same email.";
+    };
+    var doInsert = function(){
+      sb("users", {method:"POST", headers:{"Prefer":"return=minimal"}, body:{name:name, email:email, password:pass, country:country, role:"member"}}).then(finishSignup).catch(signupFailed);
+    };
+    sb("rpc/member_by_email", {method:"POST", body:{p_email:email}}).then(function(r){
+      if(r && r.email){
+        $("authSubmit").disabled = false;
+        $("authMsg").textContent = "That email is already registered — sign in instead.";
+        return;
+      }
+      doInsert();
+    }).catch(doInsert);
   } else {
     var found = null;
     state.users.forEach(function(u){ if(u.email === email) found = u; });
     var finish = function(u){
       state.user = {id:u.id, name:u.name, username:u.username || u.email.split("@")[0], avatar:u.avatar || "", email:u.email, country:u.country, isOwner: state.ownerClaimed && state.ownerEmail === u.email};
       if(state.ownerEmail === u.email){ state.user.isOwner = true; state.ownerClaimed = true; }
+      if(state.user.isOwner) ownerCreds = {email: u.email, pass: pass};
       state.saved = (store.savedByEmail && store.savedByEmail[u.email]) || state.saved || {};
       saveStore(); updateInboxBadge();
       closeOverlay("authOverlay"); renderAuthArea(); renderGrid();
@@ -2574,7 +2742,7 @@ function renderDashboard(){
     }
     p.innerHTML = editHtml + (mine.length ? mine.map(function(c){
       return '<div class="stack-row">' + (c.img ? '<img src="' + esc(c.img) + '" alt="" />' : '') +
-        '<div class="grow"><b>' + esc(carTitle(c)) + '</b> · ' + money(c.price) + '<br /><span class="hint">' + esc(c.city) + ', ' + esc(c.country) + ' · Posted ' + esc(c.created) + '</span><br />' + privateCountHTML(c) + '</div>' +
+        '<div class="grow"><b>' + esc(carTitle(c)) + (c.year ? ' ' + esc(c.year) : '') + '</b> · ' + money(c.price) + '<br /><span class="hint">' + esc(locText(c)) + ' · Posted ' + esc(c.created) + '</span><br />' + privateCountHTML(c) + '</div>' +
         statusPill(c.status) +
         '<span class="row-actions"><button class="btn small" data-edit="' + c.id + '">Edit</button>' +
         (c.status !== "Sold" ? '<button class="btn small ok" data-sold="' + c.id + '">Mark sold</button>' : '') +
@@ -2721,8 +2889,10 @@ function renderDashboard(){
   }
 }
 function setOffer(id, status){
-  state.offers.forEach(function(o){ if(o.id === id) o.status = status; });
-  sb("offers?id=eq." + encodeURIComponent(id), {method:"PATCH", headers:{"Prefer":"return=minimal"}, body:{status:status}}).catch(function(){});
+  var dbId = null;
+  state.offers.forEach(function(o){ if(o.id === id){ o.status = status; if(o.dbId) dbId = o.dbId; } });
+  saveStore();
+  sb("offers?id=eq." + encodeURIComponent(dbId || id), {method:"PATCH", headers:{"Prefer":"return=minimal"}, body:{status:status}}).catch(function(){});
   renderDashboard(); toast("Offer " + status.toLowerCase() + ".");
 }
 </script>
@@ -2798,6 +2968,10 @@ var GRANT_SQL = [
 "drop policy if exists \"ce users insert\" on public.users;",
 "create policy \"ce users insert\" on public.users",
 "  for insert to anon, authenticated with check (true);",
+"-- New accounts must land as members: if a row is inserted with no role,",
+"-- the role rule rejects it and the registration silently fails — this",
+"-- default (and the role the website now sends) keeps sign-ups working.",
+"alter table public.users alter column role set default 'member';",
 "drop policy if exists \"ce users update\" on public.users;",
 "",
 "-- ===== The ONE owner account (managed in Supabase only) =====",
@@ -2834,6 +3008,69 @@ var GRANT_SQL = [
 "     where (role is null or role <> 'owner') and lower(email) = lower(p_email)",
 "       and password = p_password) $$;",
 "grant execute on function public.check_member_login(text, text) to anon, authenticated;",
+"",
+"-- Full member list for the owner panel. The function checks the",
+"-- caller's email + password against the owner row itself (the same",
+"-- check as check_owner_login) and returns the list ONLY to the owner;",
+"-- anyone else gets null, so the member list can never be harvested",
+"-- with the website's public key. Non-secret fields only, never passwords.",
+"drop function if exists public.all_members();",
+"create or replace function public.all_members(p_email text, p_password text)",
+"returns jsonb language sql security definer set search_path = public as",
+"$$ select case when exists (select 1 from public.users",
+"     where role = 'owner' and lower(email) = lower(p_email)",
+"       and password = p_password)",
+"     then (select coalesce(jsonb_agg(t), '[]'::jsonb) from (select id, name, email, country, role, created_at from public.users order by created_at) t)",
+"     else null end $$;",
+"grant execute on function public.all_members(text, text) to anon, authenticated;",
+"",
+"-- Inspection bookings get their own table (they used to live only in",
+"-- the page's memory and vanished on reload). Anyone may add a booking;",
+"-- updating one is allowed the same way as offers/reports; reading the",
+"-- list back is owner-only, through all_bookings below.",
+"create table if not exists public.bookings (",
+"  id bigint generated always as identity primary key,",
+"  car_id text, car_title text, name text, contact text,",
+"  date text, time text, status text default 'Booked',",
+"  created_at timestamptz not null default now()",
+");",
+"alter table public.bookings enable row level security;",
+"drop policy if exists \"ce bookings insert\" on public.bookings;",
+"create policy \"ce bookings insert\" on public.bookings",
+"  for insert to anon, authenticated with check (true);",
+"drop policy if exists \"ce bookings update\" on public.bookings;",
+"create policy \"ce bookings update\" on public.bookings",
+"  for update to anon, authenticated using (true) with check (true);",
+"",
+"-- Owner-only read-back for the admin panel: offers, reports and",
+"-- bookings are write-only with the website's public key, so the panel",
+"-- reads them through these functions — each one first checks the",
+"-- caller's email + password against the owner row, exactly like",
+"-- all_members, and returns nothing to anyone else.",
+"create or replace function public.all_offers(p_email text, p_password text)",
+"returns jsonb language sql security definer set search_path = public as",
+"$$ select case when exists (select 1 from public.users",
+"     where role = 'owner' and lower(email) = lower(p_email)",
+"       and password = p_password)",
+"     then (select coalesce(jsonb_agg(t), '[]'::jsonb) from (select id, car_id, car_title, buyer_name, buyer_email, amount, status, created_at from public.offers order by created_at desc) t)",
+"     else null end $$;",
+"grant execute on function public.all_offers(text, text) to anon, authenticated;",
+"create or replace function public.all_reports(p_email text, p_password text)",
+"returns jsonb language sql security definer set search_path = public as",
+"$$ select case when exists (select 1 from public.users",
+"     where role = 'owner' and lower(email) = lower(p_email)",
+"       and password = p_password)",
+"     then (select coalesce(jsonb_agg(t), '[]'::jsonb) from (select id, car_id, car_title, reported_by, reason, status, created_at from public.reports order by created_at desc) t)",
+"     else null end $$;",
+"grant execute on function public.all_reports(text, text) to anon, authenticated;",
+"create or replace function public.all_bookings(p_email text, p_password text)",
+"returns jsonb language sql security definer set search_path = public as",
+"$$ select case when exists (select 1 from public.users",
+"     where role = 'owner' and lower(email) = lower(p_email)",
+"       and password = p_password)",
+"     then (select coalesce(jsonb_agg(t), '[]'::jsonb) from (select id, car_id, car_title, name, contact, date, time, status, created_at from public.bookings order by created_at desc) t)",
+"     else null end $$;",
+"grant execute on function public.all_bookings(text, text) to anon, authenticated;",
 "",
 "-- Create the owner here, or in Table Editor → users → Insert row:",
 "-- insert into public.users (name, email, password, country, role)",
@@ -2907,15 +3144,18 @@ function renderOwner(){
       state.ownerTab = b.getAttribute("data-otab");
       renderOwner();
       /* Refresh from Supabase on every tab switch, so newly submitted ads
-         appear in Approvals without the owner reloading the page. */
+         appear in Approvals and new members in Users, without the owner
+         reloading the page. */
       loadFromSupabase().then(function(){ renderOwner(); });
+      loadMembersFromDB().then(function(){ renderOwner(); });
+      loadAdminDataFromDB().then(function(){ renderOwner(); });
     });
   });
   var p = $("ownerPanel");
   function carRow(c, withActions){
     return '<div class="stack-row">' + (c.img ? '<img src="' + esc(c.img) + '" alt="" />' : '') +
-      '<div class="grow"><b>' + esc(carTitle(c)) + '</b> · ' + money(c.price) + '<br /><span class="hint">' +
-      esc(c.city) + ', ' + esc(c.country) + ' · Seller: ' + esc(c.seller) + ' · ' + esc(c.created) + '</span></div>' +
+      '<div class="grow"><b>' + esc(carTitle(c)) + (c.year ? ' ' + esc(c.year) : '') + '</b> · ' + money(c.price) + '<br /><span class="hint">' +
+      esc(locText(c)) + ' · Seller: ' + esc(c.seller) + ' · ' + esc(c.created) + '</span></div>' +
       statusPill(c.status) + (withActions || "") + '</div>';
   }
   var adminForms = '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px"><button class="btn gold" id="admAddBtn" type="button">＋ Add new ad</button><span class="hint" style="align-self:center">Owner only: add an ad directly, or edit, stop, approve and delete any ad below — whoever posted it.</span></div>';
@@ -2981,7 +3221,8 @@ function renderOwner(){
       state.users.map(function(u){
         var n = state.cars.filter(function(c){ return c.sellerEmail === u.email; }).length;
         return '<tr><td><b>' + esc(u.name) + '</b>' + (state.ownerEmail === u.email ? ' · Owner' : '') + '</td><td>' + esc(u.email) + '</td><td>' + esc(u.country || "—") + '</td><td>' + esc(u.joined || "—") + '</td><td>' + n + '</td></tr>';
-      }).join("") + '</tbody></table>';
+      }).join("") + '</tbody></table>' +
+      (state.membersDbState === "ok" ? "" : '<p class="hint" style="margin-top:12px">This list shows the members this browser knows about. The full list of everyone who registered loads only right after a fresh owner login to this panel (never from a restored session — the member list is released by Supabase only to the owner), and only once the latest one-time SQL from the <b>Setup &amp; hosting</b> tab has been run in Supabase → SQL Editor. If members are missing: log out of admin, log back in, and check that SQL has been run.</p>');
   }
   if(state.ownerTab === "offers"){
     p.innerHTML = state.offers.length ? state.offers.map(function(o){
@@ -3000,7 +3241,7 @@ function renderOwner(){
       return '<div class="stack-row"><div class="grow"><b>' + esc(b.carTitle) + '</b><br /><span class="hint">' + esc(b.name) + ' · ' + esc(b.contact) + ' · ' + esc(b.date) + (b.time ? " at " + esc(b.time) : "") + '</span></div>' +
         statusPill(b.status) +
         (b.status === "Booked" ? '<span class="row-actions"><button class="btn small ok" data-bconf="' + b.id + '">Confirm</button><button class="btn small" data-bdone="' + b.id + '">Mark completed</button><button class="btn small danger" data-bcancel="' + b.id + '">Cancel</button></span>' : '') + '</div>';
-    }).join("") : '<div class="empty"><b>No inspection bookings yet</b>Bookings made from listing pages this session appear here for confirmation.</div>';
+    }).join("") : '<div class="empty"><b>No inspection bookings yet</b>Bookings made from listing pages appear here for confirmation.</div>';
   }
   if(state.ownerTab === "forums"){
     p.innerHTML = state.forums.length ? state.forums.map(function(f){
@@ -3066,7 +3307,7 @@ function renderOwner(){
       '<div class="cell"><b>' + state.blogs.reduce(function(a,b){return a+b.views;},0) + '</b><span>blog reads</span></div>' +
       '<div class="cell"><b>' + state.forums.reduce(function(a,f){return a+f.views;},0) + '</b><span>forum views</span></div></div>' +
       '<table class="list"><thead><tr><th>Listing</th><th>Status</th><th>Views</th><th>Clicks</th></tr></thead><tbody>' +
-      sorted.map(function(c){ return '<tr><td><b>' + esc(carTitle(c)) + '</b><br /><span class="hint">' + esc(c.city) + ', ' + esc(c.country) + '</span></td><td>' + statusPill(c.status) + '</td><td><b data-views-for="' + c.id + '">' + (c.views||0) + '</b></td><td><b data-clicks-for="' + c.id + '">' + (c.clicks||0) + '</b></td></tr>'; }).join("") +
+      sorted.map(function(c){ return '<tr><td><b>' + esc(carTitle(c)) + (c.year ? ' ' + esc(c.year) : '') + '</b><br /><span class="hint">' + esc(locText(c)) + '</span></td><td>' + statusPill(c.status) + '</td><td><b data-views-for="' + c.id + '">' + (c.views||0) + '</b></td><td><b data-clicks-for="' + c.id + '">' + (c.clicks||0) + '</b></td></tr>'; }).join("") +
       '</tbody></table><p class="hint">Counters update in real time as visitors open and click listings — no refresh needed.</p>';
   }
   if(state.ownerTab === "setup"){
@@ -3086,7 +3327,7 @@ function renderOwner(){
         '<li>Create the owner in Supabase: <b>Table Editor → users → Insert row</b> — fill name, email, password and country, and set <code>role</code> to <code>owner</code>.</li>' +
         '<li>The owner then logs in at <b>/admin</b> with that email and password. On every login the website reads the owner\'s email from Supabase and asks a database function (<code>check_owner_login</code>, created by the SQL above) to verify the password — the password itself is never sent to the browser, and the SQL also makes the <code>password</code> column unreadable through the website\'s key, so nobody can harvest it.</li>' +
         '<li>Forgot the owner password? There is no reset on the website: in Supabase, <b>delete the owner row</b> and insert a new owner row with a new password.</li>' +
-        '<li>Members stay private too: the database exposes only the single owner row — member sign-in looks up one exact email at a time through a database function, and favorites, offers and reports are write-only, so buyer names and emails can never be listed with the website\'s key.</li>' +
+        '<li>Members stay private too: the database exposes only the single owner row — member sign-in looks up one exact email at a time through a database function, and favorites, offers, reports and bookings can be added with the website\'s key but never listed by it. The owner panel reads the member list, offers, reports and bookings back only after the owner login, through database functions that check the owner\'s own email and password inside Supabase first.</li>' +
       '</ol>' +
       '<h3 style="margin:24px 0 8px">Hosting — Netlify (drag &amp; drop)</h3>' +
       '<p class="hint" style="margin-top:0">No GitHub import needed. This site is a plain static folder, ready to drop:</p>' +
@@ -3102,7 +3343,7 @@ function renderOwner(){
       '<button class="btn small" id="dlSql">Download grant SQL</button></div>' +
       '<p class="hint">The same <code>netlify.toml</code> is also included in this site\'s <code>assets</code> folder in the export — just move it next to <code>index.html</code>.</p>';
     $("sbTest").addEventListener("click", function(){
-      var res = $("sbResults"); res.innerHTML = '<p class="hint">Testing all 6 tables…</p>';
+      var res = $("sbResults"); res.innerHTML = '<p class="hint">Testing all tables…</p>';
       var done = [];
       var chain = Promise.resolve();
       TABLES.forEach(function(t){
@@ -3110,7 +3351,7 @@ function renderOwner(){
           return sb(t + "?select=id&limit=1").then(function(){
             done.push('<div class="stack-row"><div class="grow"><b>' + t + '</b></div><span class="pill approved">Reachable</span></div>');
           }).catch(function(err){
-            if(t === "favorites" || t === "offers" || t === "reports"){
+            if(t === "favorites" || t === "offers" || t === "reports" || t === "bookings"){
               done.push('<div class="stack-row"><div class="grow"><b>' + t + '</b><br /><span class="hint">Reads are blocked on purpose — the website can add rows to this table but never read them back, so buyer details stay private.</span></div><span class="pill">Write-only</span></div>');
             } else {
               done.push('<div class="stack-row"><div class="grow"><b>' + t + '</b><br /><span class="hint">' + esc(err.message) + '</span></div><span class="pill rejected">Blocked</span></div>');
@@ -3120,7 +3361,7 @@ function renderOwner(){
       });
       chain.then(function(){
         res.innerHTML = done.join("");
-        $("sbStatus").textContent = "Test finished — users, cars and car_images should say Reachable; favorites, offers and reports are Write-only by design. If users or cars say Blocked with a permission error, run Step 1 SQL above, then test again.";
+        $("sbStatus").textContent = "Test finished — users, cars and car_images should say Reachable; favorites, offers, reports and bookings are Write-only by design. If users or cars say Blocked with a permission error, run Step 1 SQL above, then test again.";
       });
     });
     $("copySql").addEventListener("click", function(){ copyText(GRANT_SQL, "SQL copied — paste it in Supabase → SQL Editor and run it."); });
@@ -3206,8 +3447,10 @@ function renderOwner(){
     renderGrid(); renderOwner(); toast("Listing deleted.");
   });});
   p.querySelectorAll("[data-rclose]").forEach(function(b){ b.addEventListener("click", function(){
-    state.reports.forEach(function(r){ if(r.id === b.getAttribute("data-rclose")) r.status = "Reviewed"; });
-    sb("reports?id=eq." + encodeURIComponent(b.getAttribute("data-rclose")), {method:"PATCH", headers:{"Prefer":"return=minimal"}, body:{status:"Reviewed"}}).catch(function(){});
+    var dbId = null;
+    state.reports.forEach(function(r){ if(r.id === b.getAttribute("data-rclose")){ r.status = "Reviewed"; if(r.dbId) dbId = r.dbId; } });
+    saveStore();
+    sb("reports?id=eq." + encodeURIComponent(dbId || b.getAttribute("data-rclose")), {method:"PATCH", headers:{"Prefer":"return=minimal"}, body:{status:"Reviewed"}}).catch(function(){});
     renderOwner(); toast("Report marked reviewed.");
   });});
   p.querySelectorAll("[data-fapprove]").forEach(function(b){ b.addEventListener("click", function(){
@@ -3251,7 +3494,10 @@ function setCarStatus(id, status){
   toast("Listing " + status.toLowerCase() + ".");
 }
 function setBooking(id, status){
-  state.bookings.forEach(function(b){ if(b.id === id) b.status = status; });
+  var dbId = null;
+  state.bookings.forEach(function(b){ if(b.id === id){ b.status = status; if(b.dbId) dbId = b.dbId; } });
+  saveStore();
+  if(dbId) sb("bookings?id=eq." + encodeURIComponent(dbId), {method:"PATCH", headers:{"Prefer":"return=minimal"}, body:{status:status}}).catch(function(){});
   renderOwner(); toast("Inspection " + status.toLowerCase() + ".");
 }
 function copyText(text, msg){
@@ -3340,6 +3586,7 @@ function submitBlogPost(){
 }
 function openBlog(id, skipCount){
   var b = findBlog(id); if(!b) return;
+  state.detailBlogId = id;
   if(!skipCount){ b.views++; persistBlogSocial(b); }
   $("dTitle").textContent = b.title;
   var img = $("dImg"); img.src = b.img; img.alt = b.title; img.style.display = "block";
@@ -3588,6 +3835,43 @@ if(!window.matchMedia || !window.matchMedia("(prefers-reduced-motion: reduce)").
 if(isAdminURL()){
   enterAdminMode();
 }
+/* ---------- homepage preview: latest blog posts + forum topics ----------
+   The homepage used to link to Blogs and Forums only from the nav and
+   footer. This section previews the newest approved posts and topics
+   right on the homepage; tapping one opens it in its own view. */
+function renderHomeCommunity(){
+  var box = $("homeCommunity");
+  if(!box) return;
+  var blogs = state.blogs.filter(function(b){ return b.status === "Approved"; }).slice(0, 3);
+  var forums = state.forums.filter(function(f){ return f.status === "Approved"; }).slice(0, 3);
+  var html = "";
+  if(blogs.length){
+    html += '<div class="grid" style="margin-bottom:18px">' + blogs.map(blogCardHTML).join("") + '</div>';
+  }
+  if(forums.length){
+    html += '<div class="panel">' + forums.map(function(f){
+      return '<div class="stack-row"><div class="grow"><b>' + esc(f.title) + '</b><br /><span class="hint">' + esc(f.cat) + ' · By ' + esc(f.author) + ' · ' + esc(f.date) + ' · 💬 ' + f.replies.length + ' replies · ♥ ' + (f.likes || []).length + ' likes</span></div>' +
+        '<span class="row-actions"><button class="btn small gold" data-hforum="' + f.id + '">Read topic</button></span></div>';
+    }).join("") +
+    '<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn small" data-hgoto="blogs">All blog posts</button><button class="btn small" data-hgoto="forums">All forum topics</button></div></div>';
+  }
+  box.innerHTML = html || '<div class="empty"><b>Nothing here yet</b>Blog posts and forum topics will appear here as they are published.</div>';
+  box.querySelectorAll("[data-blog]").forEach(function(btn){
+    btn.addEventListener("click", function(){ openBlog(btn.getAttribute("data-blog")); });
+  });
+  box.querySelectorAll("[data-hforum]").forEach(function(btn){
+    btn.addEventListener("click", function(){
+      var id = btn.getAttribute("data-hforum");
+      state.forums.forEach(function(x){ if(x.id === id) x.views++; });
+      state.forumOpen = id;
+      showView("forums");
+    });
+  });
+  box.querySelectorAll("[data-hgoto]").forEach(function(b){
+    b.addEventListener("click", function(){ showView(b.getAttribute("data-hgoto")); });
+  });
+}
+
 /* learn who the one owner is, straight from Supabase (users, role = 'owner') */
 fetchOwnerFromDB().then(function(){
   /* A restored sign-in stays valid; only drop a restored ADMIN unlock if
@@ -3597,6 +3881,7 @@ fetchOwnerFromDB().then(function(){
   renderAuthArea(); updateInboxBadge();
 }, function(){});
 loadFromSupabase().then(function(){ renderGrid(); });
+renderHomeCommunity();
 </script>
 </body>
 </html>
