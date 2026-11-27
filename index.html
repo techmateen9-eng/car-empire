@@ -119,12 +119,6 @@
   .hero-search{background:var(--surface);color:var(--ink);border-radius:14px;padding:12px;display:grid;
     grid-template-columns:1.4fr 1fr 1fr auto;gap:10px;box-shadow:var(--shadow);margin-top:22px}
   .hero-search input,.hero-search select{border:1px solid var(--line);border-radius:9px;padding:9px 11px;background:var(--surface);color:var(--ink);width:100%}
-  .stats{display:flex;gap:0;flex-wrap:wrap;border-top:1px solid var(--line);background:var(--surface)}
-  .stats .stat{flex:1 1 150px;padding:16px 18px;border-right:1px solid var(--line)}
-  .stats .stat:last-child{border-right:0}
-  .stats b{font-size:24px;display:block}
-  .stats span{color:var(--muted);font-size:13px;font-weight:600}
-
   /* ---------- sections ---------- */
   section.block{padding:38px 0 8px}
   .sec-head{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:16px}
@@ -389,8 +383,6 @@
     .card .body{padding:15px 16px 17px;gap:9px}
     .card .price{font-size:22px}
     .card h3{font-size:17.5px}
-    .stats .stat{flex:1 1 42%;padding:14px 15px}
-    .stats b{font-size:22px}
     section.block{padding:30px 0 6px}
     .sec-head h2{font-size:23px}
     .panel{padding:17px 16px}
@@ -399,10 +391,9 @@
     table.list tr{display:block;border-bottom:1px solid var(--line);padding:8px 0}
   }
 
-  /* ---------- tablets: even two-column ads, roomy stats ---------- */
+  /* ---------- tablets: even two-column ads ---------- */
   @media (min-width:561px) and (max-width:900px){
     .grid{grid-template-columns:repeat(2,1fr)}
-    .stats .stat{flex:1 1 42%}
     .hero-in{padding:52px 24px 56px;padding-left:24px;padding-right:24px}
   }
   /* ---------- large screens: wide LCD / big desktop ---------- */
@@ -461,7 +452,7 @@
   img,video,svg,iframe,table,pre{max-width:100%}
   .wrap{width:100%}
   .hero,header.top,footer.site{overflow-x:clip}
-  .grid>*,.blog-grid>*,.aff-grid>*,.filters>*,.hero-search>*,.form-grid>*,.kv>*,.specs>*,.steps>*,.upgrid>*,footer.site .cols>*,.stats .stat{min-width:0}
+  .grid>*,.blog-grid>*,.aff-grid>*,.filters>*,.hero-search>*,.form-grid>*,.kv>*,.specs>*,.steps>*,.upgrid>*,footer.site .cols>*{min-width:0}
   .filters input,.filters select,.hero-search input,.hero-search select,.field input,.field select,.field textarea{min-width:0}
   p,h1,h2,h3,.hint,.loc{overflow-wrap:break-word}
   @media (max-width:560px){
@@ -524,8 +515,6 @@
       </form>
     </div>
   </div>
-
-  <div class="stats wrap" id="statsStrip" style="margin-top:22px;border:1px solid var(--line);border-radius:14px;overflow:hidden"></div>
 
   <section class="block wrap" id="listings">
     <div class="sec-head">
@@ -1799,19 +1788,6 @@ fillSelect($("afCountry"), COUNTRIES, null);
 function publicCars(){ return state.cars.filter(function(c){ return (c.status === "Approved" || c.status === "Sold") && !!(c.img || (c.media && c.media.length)); }); }
 function renderStats(){
   var pub = publicCars();
-  var live = pub.filter(function(c){ return c.status === "Approved"; });
-  var countries = {};
-  live.forEach(function(c){ countries[c.country] = true; });
-  var sellers = {};
-  pub.forEach(function(c){ sellers[c.seller] = true; });
-  var pending = state.cars.filter(function(c){ return c.status === "Pending"; }).length;
-  $("statsStrip").innerHTML =
-    '<div class="stat"><b>' + live.length + '</b><span>cars live in Pakistan</span></div>' +
-    '<div class="stat"><b>' + Object.keys(countries).length + '</b><span>cities covered</span></div>' +
-    '<div class="stat"><b>' + Object.keys(sellers).length + '</b><span>sellers</span></div>' +
-    '<div class="stat"><b>' + pending + '</b><span>ads in owner review</span></div>' +
-    '<div class="stat"><b>' + state.blogs.reduce(function(a,b){return a+b.views;},0) + '</b><span>blog reads</span></div>' +
-    '<div class="stat"><b>' + state.forums.reduce(function(a,f){return a+f.views;},0) + '</b><span>forum views</span></div>';
   var chips = {};
   pub.forEach(function(c){ chips[c.country] = (chips[c.country] || 0) + 1; });
   $("countryChips").innerHTML = Object.keys(chips).sort().map(function(k){
